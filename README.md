@@ -23,7 +23,7 @@ start the server
 
 Make a request to ```localhost:10420```
 
-####The request Handler
+#### The request Handler
 ```js
 module.exports = {
     GET: (url, body, headers, req) => {        
@@ -61,7 +61,7 @@ If you need to set the statusCode, headers, etc, you must return an object with 
 }
 ```
 
-##Config
+## Config
 ```js
 {
     port: 10420,
@@ -100,11 +100,11 @@ If you need to set the statusCode, headers, etc, you must return an object with 
     - **write**: A method to convert the response body to a string
 
 
-####A note on Filters
+#### A note on Filters
 Filters can prevent the request from being handled by setting res.finished = true. This will short-circuit the filters
 and return immediately as soon as it has been set.
 
-##Routes
+## Routes
 Routes are based entirely on their directory structure much like they are in apache.
 
 Example dir:
@@ -118,7 +118,7 @@ would handle:
 - /strains/gorillaGlue
 - /strains/blueDream
 
-####Path variables
+#### Path variables
 You can include path variables by prefixing the folder or file name with a $
 
 Example dir:
@@ -138,7 +138,7 @@ The variable will be the folder or file name excluding the $, i.e. $strainName -
 
 **You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn't be defined. 
 
-####Catchall path
+#### Catchall path
 You can make a handler handle all requests that start with the given path by appending a + to the file or folder name.
 
 Example dir:
