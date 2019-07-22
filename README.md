@@ -4,12 +4,16 @@
 
 ## Getting started
 Create a directory for your api and a root directory for your routes
+
 ```mkdir -p ~/api/www```
 
 Install spliffy
+
 ```cd ~/api && npm install --save spliffy```
 
-Then create a handler js file in that directory with the name of the end point. I.e. ```vi ~/api/www/spliffy.js```
+Then create a handler js file in that directory with the name of the end point. 
+
+```vi ~/api/www/spliffy.js```
 ```js
 module.exports = {
     GET: () => "hello spliffy"
