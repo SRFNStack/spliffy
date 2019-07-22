@@ -167,3 +167,13 @@ would handle:
 
 - /www/strains/gorillaGlue/info/something/more/stuff
 - /www/strains/blueDream/dankness/allOfIt
+
+#####Feature backlog (ordered by priority)
+- ssl w/letsEncrypt certificate support
+- authentication/authorization filter with default and per handler configuration
+- compression
+- redirect helper function
+- cacheing filter
+- more robust content handling
+- multipart file handling
+- static file handling
