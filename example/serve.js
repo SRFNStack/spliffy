@@ -1,1 +1,1 @@
-require('../index')({routeDir: './www'})
+require('../index')({routeDir: __dirname+ '/www'})

@@ -2,26 +2,29 @@
 
 > Node web framework with apache like dir based route config to get you lit quick
 
-## Basics
-To get started, create a directory with a handler
-```mkdir ~/www/index.js```
+## Getting started
+Create a directory for your api and a root directory for your routes
+```mkdir -p ~/api/www```
 
-The handler should export an object with the handled http methods as properties.
+Install spliffy
+```cd ~/api && npm install --save spliffy```
+
+Then create a handler js file in that directory with the name of the end point. I.e. ```vi ~/api/www/spliffy.js```
 ```js
 module.exports = {
-    GET: () => "hello world"
+    GET: () => "hello spliffy"
 }
 ```
 
-Create the start script, ```~/serve.js```
+Create the start script, ```vi ~/api/serve.js```, routeDir should be an absolute path. 
 ```js
-require('../index')({routeDir: './www'})
+require('spliffy')({routeDir: __dirname+ '/www'})
 ```
 
 start the server
-```node serve.js```
+```node ~/api/serve.js```
 
-Make a request to ```localhost:10420```
+Make a request to ```localhost:10420/spliffy```
 
 #### The request Handler
 ```js
@@ -33,6 +36,8 @@ module.exports = {
 ```
 
 The exported function names are request methods, any request method is allowed, **but must be all caps**
+
+Files named index.js can be created to handle the route of the name of the folder just like in apache.
 
 Handler arguments:
 - **url**: An object containing path and parameter information about the url
@@ -84,7 +89,7 @@ If you need to set the statusCode, headers, etc, you must return an object with 
 ```
 
 - **port**: The port for the server to listen on
-- **routeDir**: The directory the routes are contained in
+- **routeDir**: The directory the routes are contained in, should be an absolute path
 - **routePrefix**: A prefix that will be included at the beginning of the path for every request. 
             For example, a request to /foo becomes /routePrefix/foo
 - **filters**: An array of functions to filter incoming requests
@@ -112,11 +117,20 @@ Example dir:
     - strains
         - gorillaGlue.js
         - blueDream.js
+        - indica
+            - index.js
+        - sativa
+            - index.js
+            - smokeit.js
+        - index.js
 
-would handle:
-
-- /strains/gorillaGlue
-- /strains/blueDream
+This would create the following route mappings:
+- /strains/ > /www/strains/index.js
+- /strains/gorillaGlue > /www/strains/gorillaGlue.js
+- /strains/blueDream > /www/strains/blueDream.js
+- /strains/indica/ > /www/strains/indica/index.js
+- /strains/sativa/ > /www/strains/sativa/index.js
+- /strains/sativa/smokeit > /www/strains/sativa/smokeit.js
 
 #### Path variables
 You can include path variables by prefixing the folder or file name with a $
