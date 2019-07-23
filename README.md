@@ -1,4 +1,4 @@
-# ![Alt text](./spliffy_logo_text_small.png?raw=true "Spliffy Logo")
+# ![Alt text](spliffy_logo_text_small_1.png?raw=true "Spliffy Logo")
 
 > Node web framework with apache like dir based route config to get you lit quick
 
