@@ -168,7 +168,7 @@ would handle:
 - /www/strains/gorillaGlue/info/something/more/stuff
 - /www/strains/blueDream/dankness/allOfIt
 
-#####Feature backlog (ordered by priority)
+##### Feature backlog (ordered by priority)
 - ssl w/letsEncrypt certificate support
 - authentication/authorization filter with default and per handler configuration
 - compression
