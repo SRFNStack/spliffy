@@ -1,4 +1,4 @@
-# Spliffy
+# ![Alt text](./spliffy_logo_text_small.png?raw=true "Spliffy Logo")
 
 > Node web framework with apache like dir based route config to get you lit quick
 
@@ -173,7 +173,7 @@ would handle:
 - authentication/authorization filter with default and per handler configuration
 - compression
 - redirect helper function
-- cacheing filter
+- caching filter
 - more robust content handling
 - multipart file handling
 - static file handling
