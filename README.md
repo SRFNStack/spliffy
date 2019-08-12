@@ -30,7 +30,26 @@ start the server
 
 Make a request to ```localhost:10420/spliffy```
 
-#### The request Handler
+### Static Files
+Any non-js files will be served verbatim from disk.
+
+If you add or rename files, you must restart the server for the changes to take effect.
+
+Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
+
+The extension determines the content-type of the file for the known types listed at mozilla.org: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
+
+You can also add custom extension to content-type mappings by setting the staticContentTypes property on the config.
+
+GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed.
+
+ETags will be generated on startup and will be recalculated if the file content changes. The cache-control max-age is set to 10min by default for static files.
+
+You can configure this with the staticCacheControl property of the config.
+
+If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to .static.js. 
+
+### JS Request Handler
 ```js
 module.exports = {
     GET: ({url, body, headers, req, res}) => {        
@@ -53,27 +72,7 @@ Handler arguments:
 - **req**: The un-adulterated node http.IncomingMessage
 - **res**: The un-adulterated node http.ServerResponse
 
-### Response
-#### static files
-If we encounter a non-js file, we will try to detect it's content-type and return the file verbatim.
-
-If you add or rename files, restart the server for the changes to take effect
-
-Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
-
-We will guess the content-type based on this incomplete list of mime types from mozilla.org: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
-
-You can also add custom extension to content-type mappings by setting the staticContentTypes property on the config.
-
-GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed.
-
-ETags will be generated on startup and will be recalculated any time the file changes, renames require a restart. The cache-control max-age is set to 10min by default for static files.
-
-You can configure this with the staticCacheControl property of the config.
-
-If you want to serve a .js file as a static file instead of having it be a route handler, change the prefix to .static.js. 
-
-#### .js files 
+#### Handler Return
 The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type.
 The default, application/json, is already set.
 
