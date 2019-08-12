@@ -48,9 +48,7 @@ const staticHandler = ( fullPath, fileName ) => {
 }
 
 const findRoutes = ( routeDir ) => {
-    if( !routeDir.endsWith( '/' ) ) routeDir = routeDir + '/'
-
-    let doIt = ( path, currentPath ) => {
+    let doIt = ( path ) => {
         let paths = {}
 
         for( let f of fs.readdirSync( path, { withFileTypes: true } ) ) {
@@ -58,14 +56,14 @@ const findRoutes = ( routeDir ) => {
 
             let handlerName = f.name
             if( f.isDirectory() ) {
-                route = doIt( path + '/' + f.name, currentPath.concat( [ f.name ] ) )
+                route = doIt( path + '/' + f.name, f.name )
             } else if( f.name.endsWith( '.js' ) ) {
                 let filePath = f.name === 'index.js' ? path + '/index.js' : path + '/' + f.name
                 handlerName = f.name === 'index.js' ? 'index' : handlerName.substr( 0, f.name.length - 3 )
                 route.handler = require( filePath )
             } else {
                 handlerName = f.name.startsWith( 'index.' ) ? 'index' : handlerName
-                route.handler = staticHandler( path+f.name, f.name )
+                route.handler = staticHandler( path+"/"+f.name, f.name )
             }
             if( handlerName.startsWith( '$' ) ) {
                 route.key = handlerName.substr( 1 )
@@ -77,7 +75,11 @@ const findRoutes = ( routeDir ) => {
                 route.catchall = true
                 handlerName = handlerName.substr( 0, handlerName.length - 1 )
             }
+
             paths[ handlerName ] = route
+            if(handlerName.endsWith(".html") || handlerName.endsWith(".htm")){
+                paths[handlerName.split(".html")[0]] = route
+            }
         }
         return paths
     }
@@ -229,6 +231,9 @@ const findRoute = ( url, routes, prefix ) => {
         if( nextPart > -1 && ( handler && !handler.catchall ) ) {
             path = path.substr( nextPart + 1 )
             nextPart = path.indexOf( '/' )
+            if(nextPart === -1){
+                nextPart = path.indexOf(".") > -1? nextPart.length : -1
+            }
         } else {
             break
         }
