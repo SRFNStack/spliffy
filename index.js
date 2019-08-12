@@ -3,8 +3,10 @@ const http = require( 'http' )
 const path = require( 'path' )
 const inspect = require( 'util' ).inspect
 const contentTypes = require( './content-types.js' )
+const etag = require( 'etag' )
 
 const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD' ]
+let serverConfig
 
 const contentHandlers = {
     'application/json': {
@@ -26,64 +28,105 @@ function logError( e ) {
     console.error( `[WTF] [${new Date().toISOString()}] ${args}` )
 }
 
+function logWarning( e ) {
+    const args = [ ...arguments ].map( a => inspect( a, { depth: null } ) ).join( ' ' )
+    console.warn( `[Warn] [${new Date().toISOString()}] ${args}` )
+}
+
 const staticHandler = ( fullPath, fileName ) => {
-    const extension = fileName.indexOf( '.' ) > -1 ? fileName.slice( fileName.lastIndexOf( '.' )).toLowerCase() : 'default'
-    const contentType = contentTypes[ extension ]
+    const extension = fileName.indexOf( '.' ) > -1 ? fileName.slice( fileName.lastIndexOf( '.' ) ).toLowerCase() : 'default'
+    let contentType = serverConfig.staticContentTypes && serverConfig.staticContentTypes[ extension ] || null
 
+    contentType = contentType ? contentType : contentTypes[ extension ]
+    const stat = fs.statSync( fullPath )
+    let tag = etag( fs.readFileSync( fullPath ) )
+    fs.watch( fullPath, () => {
+        try {
+            tag = etag( fs.readFileSync( fullPath ) )
+        } catch(e) {
+            logWarning( 'failed to update etag for ' + fullPath, e )
+        }
+    } )
     return {
-        GET: ( { res } ) => {
-            const stat = fs.statSync( fullPath )
+        GET: ( { req, res } ) => {
+            if( !fs.existsSync( fullPath ) ) {
+                return {
+                    statusCode: 404,
+                    statusMessage: 'Not Found'
+                }
+            } else if( req.headers[ 'if-none-match' ] === tag ) {
+                return {
+                    statusCode: 304,
+                    statusMessage: 'Not Modified'
+                }
+            } else {
+                res.writeHead( 200, {
+                    'content-type': contentType,
+                    'content-length': stat.size,
+                    'cache-control': serverConfig.staticCacheControl || 'max-age=600',
+                    'ETag': tag
+                } )
 
-            res.writeHead(200, {
-                "content-type": contentType,
-                "content-length": stat.size,
-            })
-
-            const stream = fs.createReadStream( fullPath ).pipe(res)
-            return new Promise((resolve)=>{
-                stream.on('finish', resolve)
-            })
+                const stream = fs.createReadStream( fullPath ).pipe( res )
+                return new Promise( ( resolve ) => {
+                    stream.on( 'finish', resolve )
+                } )
+            }
         }
     }
 }
 
-const findRoutes = ( routeDir ) => {
-    let doIt = ( path ) => {
-        let paths = {}
-
-        for( let f of fs.readdirSync( path, { withFileTypes: true } ) ) {
-            let route = {}
-
-            let handlerName = f.name
-            if( f.isDirectory() ) {
-                route = doIt( path + '/' + f.name, f.name )
-            } else if( f.name.endsWith( '.js' ) ) {
-                let filePath = f.name === 'index.js' ? path + '/index.js' : path + '/' + f.name
-                handlerName = f.name === 'index.js' ? 'index' : handlerName.substr( 0, f.name.length - 3 )
-                route.handler = require( filePath )
-            } else {
-                handlerName = f.name.startsWith( 'index.' ) ? 'index' : handlerName
-                route.handler = staticHandler( path+"/"+f.name, f.name )
-            }
-            if( handlerName.startsWith( '$' ) ) {
-                route.key = handlerName.substr( 1 )
-                if( 'variable' in paths ) {
-                    throw `You can not have two path variables in the same dir. Conflicting handlers: \$${route.key} and \$${paths.variable.key}.`
-                }
-                handlerName = 'variable'
-            } else if( handlerName.endsWith( '+' ) ) {
-                route.catchall = true
-                handlerName = handlerName.substr( 0, handlerName.length - 1 )
-            }
-
-            paths[ handlerName ] = route
-            if(handlerName.endsWith(".html") || handlerName.endsWith(".htm")){
-                paths[handlerName.split(".html")[0]] = route
+const getRouteInfo = ( name, routes ) => {
+    if( name.startsWith( '$' ) ) {
+        if( 'variable' in routes ) {
+            throw `You can not have two path variables in the same dir. Conflicting handlers: ${name} and \$${routes.variable.key}.`
+        }
+        return {
+            name: 'variable',
+            route: {
+                key: name.substr( 1 )
             }
         }
-        return paths
+    } else if( name.endsWith( '+' ) ) {
+        return {
+            name: name.substr( 0, name.length - 1 ),
+            route: {
+                catchall: true
+            }
+        }
+    } else
+        return { name, route: {} }
+}
+
+const findRoutes = ( f, path ) => {
+    let routes = {}
+
+    if( f.isDirectory() ) {
+        let routeInfo = getRouteInfo( f.name, routes )
+        routes[ routeInfo.name ] = {
+            ...routeInfo.route,
+            ...fs.readdirSync( path, { withFileTypes: true } )
+                 .reduce(
+                     ( children, f ) => ( { ...children, ...findRoutes( f, path + '/' + f.name ) } ),
+                     {} )
+        }
+    } else if( f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
+        let routeInfo = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
+        routeInfo.route.handler = require( path )
+        routes[ routeInfo.name ] = routeInfo.route
+    } else {
+        let route = { handler: staticHandler( path, f.name ), static: true }
+        if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
+            routes[ f.name.split( '.html' )[ 0 ] ] = route
+            routes[ f.name ] = route
+        } else if( f.name.startsWith( 'index.' ) ) {
+            routes[ f.name ] = route
+            routes[ 'index' ] = route
+        } else {
+            routes[ f.name ] = route
+        }
     }
-    return doIt( routeDir, [] )
+    return routes
 }
 
 const parseUrl = url => {
@@ -133,7 +176,7 @@ const end = ( res, code, message, body ) => {
     res.end( body )
 }
 
-const finalizeResponse = ( req, res ) => ( handled ) => {
+const finalizeResponse = ( req, res, handled ) => {
     if( res.writable && !res.finished ) {
         if( !handled ) {
             end( res, 500, 'OOPS' )
@@ -141,7 +184,7 @@ const finalizeResponse = ( req, res ) => ( handled ) => {
             let code = 200
             let message = 'OK'
             let body = handled
-            if( handled.body ) {
+            if( handled.body || handled.status || handled.statusMessage ) {
                 body = handled.body
                 if( handled.headers ) {
                     Object.entries( handled.headers )
@@ -194,8 +237,10 @@ const handle = ( url, res, req, body, handler ) => {
 
     try {
         let handled = handler[ req.method ]( { url, body, headers: req.headers, req, res } )
-        if( handled.then && typeof handled.then == 'function' ) {
-            handled.then( finalizeResponse( req, res ) )
+        if( !handled ) {
+            end( res, 500, 'OOPS' )
+        } else if( handled.then && typeof handled.then == 'function' ) {
+            handled.then( () => finalizeResponse( req, res ) )
                    .catch(
                        e => {
                            logError( e )
@@ -203,7 +248,7 @@ const handle = ( url, res, req, body, handler ) => {
                        }
                    )
         } else {
-            finalizeResponse( req, res )( handled )
+            finalizeResponse( req, res, handled )
         }
 
     } catch(e) {
@@ -216,37 +261,39 @@ const findRoute = ( url, routes, prefix ) => {
     let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
     if( path === '' || path === '/' ) path = 'index'
     let nextPart = path.indexOf( '/' )
-    let handler = routes
+    let route = routes
     let pathParameters = {}
     do {
         let part = nextPart > -1 ? path.substr( 0, nextPart ) : path
-        if( part in handler ) {
-            handler = handler[ part ]
-        } else if( handler.variable ) {
-            pathParameters[ handler.variable.key ] = part
-            handler = handler.variable || {}
-        } else {
-            handler = null
+        if( part in route ) {
+            route = route[ part ]
+        } else if( route.variable ) {
+            pathParameters[ route.variable.key ] = part
+            route = route.variable || {}
         }
-        if( nextPart > -1 && ( handler && !handler.catchall ) ) {
+
+        if( nextPart > -1 && ( route && !route.catchall ) ) {
             path = path.substr( nextPart + 1 )
             nextPart = path.indexOf( '/' )
-            if(nextPart === -1){
-                nextPart = path.indexOf(".") > -1? nextPart.length : -1
+            if( nextPart === -1 ) {
+                nextPart = path.indexOf( '.' ) > -1 ? nextPart.length : -1
             }
         } else {
             break
         }
     } while( path.length > 0 )
     return {
-        handler: handler && ( handler.handler || ( handler.index && handler.index.handler ) ),
+        handler: route && ( route.handler || ( route.index && route.index.handler ) ),
         pathParameters: pathParameters
     }
 }
 
 const requestHandler = ( { routeDir, filters, routePrefix } ) => {
     let fullRouteDir = path.resolve( routeDir )
-    const routes = findRoutes( fullRouteDir )
+    const routes = fs.readdirSync( fullRouteDir, { withFileTypes: true } )
+                     .reduce(
+                         ( children, f ) => ( { ...children, ...findRoutes( f, fullRouteDir + '/' + f.name ) } ),
+                         {} )
     return ( req, res ) => {
         logOnEnd( res, req )
         let url = parseUrl( req.url )
@@ -284,7 +331,8 @@ const requestHandler = ( { routeDir, filters, routePrefix } ) => {
     }
 }
 
-module.exports = config => {
+module.exports = function( config ) {
+    serverConfig = config
     Object.assign( contentHandlers, config.contentHandlers )
     defaults.acceptsDefault = config.acceptsDefault || defaults.acceptsDefault
     defaults.defaultContentType = config.defaultContentType || defaults.defaultContentType

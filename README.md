@@ -56,11 +56,22 @@ Handler arguments:
 ### Response
 #### static files
 If we encounter a non-js file, we will try to detect it's content-type and return the file verbatim.
+
+If you add or rename files, restart the server for the changes to take effect
+
 Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
 
 We will guess the content-type based on this incomplete list of mime types from mozilla.org: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
 
-GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed. 
+You can also add custom extension to content-type mappings by setting the staticContentTypes property on the config.
+
+GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed.
+
+ETags will be generated on startup and will be recalculated any time the file changes, renames require a restart. The cache-control max-age is set to 10min by default for static files.
+
+You can configure this with the staticCacheControl property of the config.
+
+If you want to serve a .js file as a static file instead of having it be a route handler, change the prefix to .static.js. 
 
 #### .js files 
 The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type.
@@ -103,7 +114,11 @@ These are all of the settings available and their defaults. You can include just
             read: requestBody => JSON.parse(requestBody),
             write: responseBody => JSON.stringify(responseBody)
         }
-    }
+    },
+    staticContentTypes: {
+        '.foo': 'application/foo'
+    },
+    staticCacheControl: "max-age=86400"
 }
 ```
 
@@ -122,6 +137,8 @@ These are all of the settings available and their defaults. You can include just
 - **contentHandlers**: Content negotiation handlers. mime types must be lower case.
     - **read**: A method to convert the request body to an object 
     - **write**: A method to convert the response body to a string
+- **staticContentTypes**: Custom file extension to content-type mappings. These overwrite default mappings from: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
+- **staticCacheControl**: Custom value for the Cache-Control header of static files 
 
 
 #### A note on Filters
