@@ -2,6 +2,7 @@ const fs = require( 'fs' )
 const http = require( 'http' )
 const path = require( 'path' )
 const inspect = require( 'util' ).inspect
+const contentTypes = require( './content-types.js' )
 
 const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD' ]
 
@@ -25,8 +26,31 @@ function logError( e ) {
     console.error( `[WTF] [${new Date().toISOString()}] ${args}` )
 }
 
-const findRoutes = ( path ) => {
-    let doIt = ( path, last ) => {
+const staticHandler = ( fullPath, fileName ) => {
+    const extension = fileName.indexOf( '.' ) > -1 ? fileName.slice( fileName.lastIndexOf( '.' )).toLowerCase() : 'default'
+    const contentType = contentTypes[ extension ]
+
+    return {
+        GET: ( { res } ) => {
+            const stat = fs.statSync( fullPath )
+
+            res.writeHead(200, {
+                "content-type": contentType,
+                "content-length": stat.size,
+            })
+
+            const stream = fs.createReadStream( fullPath ).pipe(res)
+            return new Promise((resolve)=>{
+                stream.on('finish', resolve)
+            })
+        }
+    }
+}
+
+const findRoutes = ( routeDir ) => {
+    if( !routeDir.endsWith( '/' ) ) routeDir = routeDir + '/'
+
+    let doIt = ( path, currentPath ) => {
         let paths = {}
 
         for( let f of fs.readdirSync( path, { withFileTypes: true } ) ) {
@@ -34,15 +58,14 @@ const findRoutes = ( path ) => {
 
             let handlerName = f.name
             if( f.isDirectory() ) {
-                route = doIt( path + '/' + f.name, last.concat( [ f.name ] ) )
+                route = doIt( path + '/' + f.name, currentPath.concat( [ f.name ] ) )
             } else if( f.name.endsWith( '.js' ) ) {
-                if( f.name === 'index.js' ) {
-                    handlerName = 'index'
-                    route.handler = require( path + '/index.js' )
-                } else {
-                    handlerName = handlerName.substr( 0, f.name.length - 3 )
-                    route.handler = require( path + '/' + f.name )
-                }
+                let filePath = f.name === 'index.js' ? path + '/index.js' : path + '/' + f.name
+                handlerName = f.name === 'index.js' ? 'index' : handlerName.substr( 0, f.name.length - 3 )
+                route.handler = require( filePath )
+            } else {
+                handlerName = f.name.startsWith( 'index.' ) ? 'index' : handlerName
+                route.handler = staticHandler( path+f.name, f.name )
             }
             if( handlerName.startsWith( '$' ) ) {
                 route.key = handlerName.substr( 1 )
@@ -58,7 +81,7 @@ const findRoutes = ( path ) => {
         }
         return paths
     }
-    return doIt( path, [] )
+    return doIt( routeDir, [] )
 }
 
 const parseUrl = url => {
@@ -109,30 +132,32 @@ const end = ( res, code, message, body ) => {
 }
 
 const finalizeResponse = ( req, res ) => ( handled ) => {
-    if( !handled ) {
-        end( res, 200, 'OK' )
-    } else {
-        let code = 200
-        let message = 'OK'
-        let body = handled
-        if( handled.body ) {
-            body = handled.body
-            if( handled.headers ) {
-                Object.entries( handled.headers )
-                      .forEach( ( [ k, v ] ) => res.setHeader( k, v ) )
+    if( res.writable && !res.finished ) {
+        if( !handled ) {
+            end( res, 500, 'OOPS' )
+        } else {
+            let code = 200
+            let message = 'OK'
+            let body = handled
+            if( handled.body ) {
+                body = handled.body
+                if( handled.headers ) {
+                    Object.entries( handled.headers )
+                          .forEach( ( [ k, v ] ) => res.setHeader( k, v ) )
+                }
+                code = handled.statusCode || 200
+                message = handled.statusMessage || 'OK'
             }
-            code = handled.statusCode || 200
-            message = handled.statusMessage || 'OK'
-        }
 
-        let contentType = req.headers[ 'accept' ] || res.getHeader( 'content-type' )
+            let contentType = req.headers[ 'accept' ] || res.getHeader( 'content-type' )
 
-        let handledContent = handleContent( body, contentType, defaults.defaultContentType, 'write' )
-        let resBody = handledContent.content
-        if( handledContent.contentType ) {
-            res.setHeader( 'content-type', handledContent.contentType )
+            let handledContent = handleRequestContent( body, contentType, defaults.defaultContentType, 'write' )
+            let resBody = handledContent.content
+            if( handledContent.contentType ) {
+                res.setHeader( 'content-type', handledContent.contentType )
+            }
+            end( res, code, message, resBody )
         }
-        end( res, code, message, resBody )
     }
 }
 
@@ -143,7 +168,7 @@ const handleError = ( res, e ) => {
     end( res, e.statusCode || 500, e.statusMessage || 'Internal Server Error', e.body || '' )
 }
 
-const handleContent = ( content, contentTypeHeader, defaultType, direction ) => {
+const handleRequestContent = ( content, contentTypeHeader, defaultType, direction ) => {
     if( content && content.length > 0 && contentTypeHeader ) {
         for( let contentType in contentTypeHeader.split( ',' ) ) {
             contentType = contentType && contentType.toLowerCase()
@@ -158,7 +183,7 @@ const handleContent = ( content, contentTypeHeader, defaultType, direction ) => 
 
 const handle = ( url, res, req, body, handler ) => {
     try {
-        body = handleContent( body, req.headers[ 'content-type' ], defaults.acceptsDefault, 'read' ).content
+        body = handleRequestContent( body, req.headers[ 'content-type' ], defaults.acceptsDefault, 'read' ).content
     } catch(e) {
         logError( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
@@ -166,23 +191,19 @@ const handle = ( url, res, req, body, handler ) => {
     }
 
     try {
-        let handled = handler[ req.method ]( url, body, req.headers, req )
-        if( !handled ) {
-            end( res, 200, 'OK' )
+        let handled = handler[ req.method ]( { url, body, headers: req.headers, req, res } )
+        if( handled.then && typeof handled.then == 'function' ) {
+            handled.then( finalizeResponse( req, res ) )
+                   .catch(
+                       e => {
+                           logError( e )
+                           handleError( res, e )
+                       }
+                   )
         } else {
-            if( !handled.then || typeof handled.then !== 'function' ) {
-                finalizeResponse( req, res )( handled )
-            } else {
-                handled.then( finalizeResponse( req, res ) )
-                       .catch(
-                           e => {
-                               logError( e )
-                               handleError( res, e )
-                           }
-                       )
-            }
-
+            finalizeResponse( req, res )( handled )
         }
+
     } catch(e) {
         logError( 'handler failed', e )
         handleError( res, e )

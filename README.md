@@ -33,13 +33,13 @@ Make a request to ```localhost:10420/spliffy```
 #### The request Handler
 ```js
 module.exports = {
-    GET: (url, body, headers, req) => {        
-        body: "hello world"
+    GET: ({url, body, headers, req, res}) => {        
+        body: "hello Mr. Marley"
     }
 }
 ```
 
-The exported function names are request methods, any request method is allowed, **but must be all caps**
+The exported propeties request methods, any request method is allowed
 
 Files named index.js can be created to handle the route of the name of the folder just like in apache.
 
@@ -49,14 +49,28 @@ Handler arguments:
     - **query**: An object containing the query parameters
     - **pathParameters**: parameters that are part of the path
 - **body**: The body of the request
-- **headers**: The request headers from the node request object
-- **req**: The un-adulterated node IncomingMessage request object
+- **headers**: The request headers
+- **req**: The un-adulterated node http.IncomingMessage
+- **res**: The un-adulterated node http.ServerResponse
 
-The handler can return any kind of data and it will be serialized automatically.
+### Response
+#### static files
+If we encounter a non-js file, we will try to detect it's content-type and return the file verbatim.
+Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
 
-You can return a promise and the server will respond with the resolved object.
+We will guess the content-type based on this incomplete list of mime types from mozilla.org: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
 
-If you need to set the statusCode, headers, etc, you must return an object with a body property for the body and one or more of the following properties
+GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed. 
+
+#### .js files 
+The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type.
+The default, application/json, is already set.
+
+If the returned value is Falsey, it will be considered an error. The default error is 500, and message is 'OOPS'.
+
+You can return a promise that resolves to the response value, and the server will respond with the resolved value.
+
+If you need to set the statusCode, headers, etc, you must return an object with a body property for the body and optionally one or more of the following properties
 ```js
 {
     headers: {
@@ -71,6 +85,7 @@ If you need to set the statusCode, headers, etc, you must return an object with 
 ```
 
 ## Config
+These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.
 ```js
 {
     port: 10420,
@@ -176,4 +191,6 @@ would handle:
 - caching filter
 - more robust content handling
 - multipart file handling
-- static file handling
+
+### Breaking changes
+breaking changes are tracked in the breaking-changes.log
