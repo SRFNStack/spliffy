@@ -139,7 +139,13 @@ const parseUrl = url => {
         let kvs = []
         do {
             let eq = query.indexOf( '=' )
-            kvs.push( [ query.substr( 0, eq ), query.substr( eq + 1, nextParam > -1 ? nextParam - eq - 1 : undefined ) ] )
+            let paramValue = query.substr( eq + 1, nextParam > -1 ? nextParam - eq - 1 : undefined )
+            let paramKey = query.substr( 0, eq )
+            if( serverConfig.decodeQueryParameters ) {
+                [ paramValue, paramKey ] = [ paramValue, paramKey ]
+                    .map( component => decodeURIComponent( component.replace( /\+/g, '%20' ) ) )
+            }
+            kvs.push( [ paramKey, paramValue ] )
             if( nextParam > -1 ) {
                 query = query.substr( nextParam + 1 )
                 nextParam = query.indexOf( '&' )
@@ -179,7 +185,8 @@ const end = ( res, code, message, body ) => {
 const finalizeResponse = ( req, res, handled ) => {
     if( res.writable && !res.finished ) {
         if( !handled ) {
-            end( res, 500, 'OOPS' )
+            //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
+            end( res, 200, 'OK' )
         } else {
             let code = 200
             let message = 'OK'
@@ -196,7 +203,7 @@ const finalizeResponse = ( req, res, handled ) => {
 
             let contentType = req.headers[ 'accept' ] || res.getHeader( 'content-type' )
 
-            let handledContent = handleRequestContent( body, contentType, defaults.defaultContentType, 'write' )
+            let handledContent = handleRequestContent( body, contentType, serverConfig.defaultContentType, 'write' )
             let resBody = handledContent.content
             if( handledContent.contentType ) {
                 res.setHeader( 'content-type', handledContent.contentType )
@@ -215,7 +222,7 @@ const handleError = ( res, e ) => {
 
 const handleRequestContent = ( content, contentTypeHeader, defaultType, direction ) => {
     if( content && content.length > 0 && contentTypeHeader ) {
-        for( let contentType in contentTypeHeader.split( ',' ) ) {
+        for( let contentType of contentTypeHeader.split( ',' ) ) {
             contentType = contentType && contentType.toLowerCase()
             if( contentHandlers[ contentType ] && typeof contentHandlers[ contentType ][ direction ] === 'function' ) {
                 return { contentType: contentType, content: contentHandlers[ contentType ][ direction ]( content ) }
@@ -228,7 +235,7 @@ const handleRequestContent = ( content, contentTypeHeader, defaultType, directio
 
 const handle = ( url, res, req, body, handler ) => {
     try {
-        body = handleRequestContent( body, req.headers[ 'content-type' ], defaults.acceptsDefault, 'read' ).content
+        body = handleRequestContent( body, req.headers[ 'content-type' ], serverConfig.acceptsDefault, 'read' ).content
     } catch(e) {
         logError( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
@@ -268,7 +275,7 @@ const findRoute = ( url, routes, prefix ) => {
         if( part in route ) {
             route = route[ part ]
         } else if( route.variable ) {
-            pathParameters[ route.variable.key ] = part
+            pathParameters[ route.variable.key ] = serverConfig.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
             route = route.variable || {}
         }
 
@@ -332,10 +339,11 @@ const requestHandler = ( { routeDir, filters, routePrefix } ) => {
 }
 
 module.exports = function( config ) {
-    serverConfig = config
+    serverConfig = config || {}
     Object.assign( contentHandlers, config.contentHandlers )
-    defaults.acceptsDefault = config.acceptsDefault || defaults.acceptsDefault
-    defaults.defaultContentType = config.defaultContentType || defaults.defaultContentType
+    if( !config.hasOwnProperty( 'decodePathParameters' ) ) serverConfig.decodePathParameters = true
+    serverConfig.acceptsDefault = config.acceptsDefault || defaults.acceptsDefault
+    serverConfig.defaultContentType = config.defaultContentType || defaults.defaultContentType
     let httpServer = http.createServer( requestHandler( config ) )
     let port = config.port || 10420
     httpServer.listen( port )

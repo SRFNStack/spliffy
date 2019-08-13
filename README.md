@@ -65,8 +65,8 @@ Files named index.js can be created to handle the route of the name of the folde
 Handler arguments:
 - **url**: An object containing path and parameter information about the url
     - **path**: The path of the current request
-    - **query**: An object containing the query parameters
-    - **pathParameters**: parameters that are part of the path
+    - **query**: An object containing the query parameters. Not decoded by default. This can be configured by setting the decodePathParameters to true.
+    - **pathParameters**: parameters that are part of the path. Not decoded by default. This can be configured by setting the decodeQueryParameters to true.
 - **body**: The body of the request
 - **headers**: The request headers
 - **req**: The un-adulterated node http.IncomingMessage
@@ -76,7 +76,7 @@ Handler arguments:
 The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type.
 The default, application/json, is already set.
 
-If the returned value is Falsey, it will be considered an error. The default error is 500, and message is 'OOPS'.
+If the returned value is Falsey, we will assume everything is fine and return a 200 OK.
 
 You can return a promise that resolves to the response value, and the server will respond with the resolved value.
 
@@ -137,7 +137,9 @@ These are all of the settings available and their defaults. You can include just
     - **read**: A method to convert the request body to an object 
     - **write**: A method to convert the response body to a string
 - **staticContentTypes**: Custom file extension to content-type mappings. These overwrite default mappings from: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
-- **staticCacheControl**: Custom value for the Cache-Control header of static files 
+- **staticCacheControl**: Custom value for the Cache-Control header of static files
+- **decodePathParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each path parameter value. This is enabled by default.
+- **decodeQueryParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.
 
 
 #### A note on Filters
