@@ -58,7 +58,7 @@ module.exports = {
 }
 ```
 
-The exported propeties request methods, any request method is allowed
+The exported properties are all caps request methods, any request method is allowed.
 
 Files named index.js can be created to handle the route of the name of the folder just like in apache.
 
