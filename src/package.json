@@ -1,13 +1,12 @@
 {
   "name": "spliffy",
-  "version": "4.3.4",
-  "author": "Robert Kmepton <r@snow87.com>",
+  "version": "4.3.5",
+  "author": "Robert Kempton <r@snow87.com>",
   "private": false,
   "homepage": "https://github.com/narcolepticsnowman/spliffy",
   "license": "MIT",
   "files": [
-    "index.js",
-    "content-types.js",
+    "src/*",
     "LICENSE.txt",
     "README.md"
   ],

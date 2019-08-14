@@ -33,7 +33,9 @@ Make a request to ```localhost:10420/spliffy```
 ### Static Files
 Any non-js files will be served verbatim from disk.
 
-If you add or rename files, you must restart the server for the changes to take effect.
+You can watch files by setting watchFiles to true on the config. See the Caveats of doing that here: https://nodejs.org/docs/latest/api/fs.html#fs_caveats
+
+Otherwise, If you add or rename files, you must restart the server for the changes to take effect.
 
 Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
 
@@ -47,7 +49,9 @@ ETags will be generated on startup and will be recalculated if the file content 
 
 You can configure this with the staticCacheControl property of the config.
 
-If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to .static.js. 
+If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to .static.js.
+
+You can cache files in memory by setting cacheStatic to true on the config. If watchFiles is enabled these will be updated when the files change, if not the server will need a restart.
 
 ### JS Request Handler
 ```js
@@ -138,9 +142,10 @@ These are all of the settings available and their defaults. You can include just
     - **write**: A method to convert the response body to a string
 - **staticContentTypes**: Custom file extension to content-type mappings. These overwrite default mappings from: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
 - **staticCacheControl**: Custom value for the Cache-Control header of static files
-- **decodePathParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each path parameter value. This is enabled by default.
+- **decodePathParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each path parameter value. true by default.
 - **decodeQueryParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.
-
+- **watchFiles**: watch the files on disk for changes. Otherwise changes require a restart. false by default
+- **cacheStatic**: cache static files in memory to increase performance. false by default.
 
 #### A note on Filters
 Filters can prevent the request from being handled by setting res.finished = true. This will short-circuit the filters
