@@ -1,25 +1,29 @@
 const contentTypes = require( './content-types.js' )
-const fs = require('fs')
-const etag = require('etag')
-const serverConfig = require('./serverConfig')
-const log = require('./log')
+const fs = require( 'fs' )
+const etag = require( 'etag' )
+const serverConfig = require( './serverConfig' )
+const log = require( './log' )
+const PassThrough = require( 'stream' ).PassThrough
 
 module.exports = {
-    create: ( fullPath, fileName, configContentTypes ) => {
+    create: async( fullPath, fileName, configContentTypes ) => {
         const extension = fileName.indexOf( '.' ) > -1 ? fileName.slice( fileName.lastIndexOf( '.' ) ).toLowerCase() : 'default'
         let contentType = configContentTypes && serverConfig.current.staticContentTypes[ extension ] || null
 
         contentType = contentType ? contentType : contentTypes[ extension ]
         const stat = fs.statSync( fullPath )
-        let tag = etag( fs.readFileSync( fullPath ) )
-        //TODO add file caching here
-        fs.watch( fullPath, () => {
-            try {
-                tag = etag( fs.readFileSync( fullPath ) )
-            } catch(e) {
-                log.warning( 'failed to update etag for ' + fullPath, e )
-            }
-        } )
+        let buffer = await
+            new Promise( ( resolve, reject ) =>
+                             fs.readFile( fullPath, ( err, data ) => {
+                                              if( err ) reject( err )
+                                              else resolve( data )
+                                          }
+                             )
+            )
+        let tag = etag( buffer )
+        if( !serverConfig.current.cacheStatic ) {
+            buffer = null
+        }
         return {
             GET: ( { req, res } ) => {
                 if( !fs.existsSync( fullPath ) ) {
@@ -39,8 +43,10 @@ module.exports = {
                         'cache-control': serverConfig.current.staticCacheControl || 'max-age=600',
                         'ETag': tag
                     } )
+                    let stream
+                    if(buffer)  stream = new PassThrough().end(buffer).pipe(res)
+                    else  stream = fs.createReadStream( fullPath ).pipe( res )
 
-                    const stream = fs.createReadStream( fullPath ).pipe( res )
                     return new Promise( ( resolve ) => {
                         stream.on( 'finish', resolve )
                     } )

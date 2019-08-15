@@ -4,7 +4,8 @@ const path = require( 'path' )
 const serverConfig = require( './serverConfig' )
 const state = {
     routes: {},
-    initializing: false
+    initializing: false,
+    hasPendingFsEvent: false
 }
 
 const getRouteInfo = ( name, routes ) => {
@@ -29,33 +30,36 @@ const getRouteInfo = ( name, routes ) => {
         return { name, route: {} }
 }
 
-const findRoutes = ( f, path ) => {
+const findRoutes = async( f, path ) => {
     let routes = {}
     if( serverConfig.current.watchFiles ) {
         try {
-            fs.watch( path, '', ()=> init() )
+            fs.watch( path, '', () => init() )
         } catch(e) {
-            fs.unwatchFile(path)
+            try {
+                fs.unwatchFile( path )
+            } catch(e) {}
             init()
         }
     }
     if( f.isDirectory() ) {
 
         let routeInfo = getRouteInfo( f.name, routes )
-        routes[ routeInfo.name ] = {
-            ...routeInfo.route,
-            ...fs.readdirSync( path, { withFileTypes: true } )
-                 .reduce(
-                     ( children, f ) => ( { ...children, ...findRoutes( f, path + '/' + f.name ) } ),
-                     {} )
-        }
+
+        return Promise.all(
+            fs.readdirSync( path, { withFileTypes: true } )
+              .map(
+                  ( f ) => findRoutes( f, path + '/' + f.name )
+              ) ).then(
+            routes => ({[routeInfo.name]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeInfo.route )} )
+        )
     } else if( f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
         let routeInfo = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
         routeInfo.route.handler = require( path )
         routes[ routeInfo.name ] = routeInfo.route
     } else {
         let route = {
-            handler: staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
+            handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
             static: true
         }
         if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
@@ -72,22 +76,30 @@ const findRoutes = ( f, path ) => {
 }
 
 const init = () => {
-    if(!state.initializing){
+    if( !state.initializing ) {
         state.initializing = true
-        console.log('Reloading routes')
-        const fullRouteDir = path.resolve( serverConfig.current.routeDir )
-        state.routes = fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
-                         .reduce(
-                             ( children, f ) => ( { ...children, ...findRoutes( f, fullRouteDir + '/' + f.name ) } ),
-                             {} )
         //debounce fs events
-        setTimeout(()=>state.initializing = false, 2000)
+        setTimeout( () => {
+            console.log( 'Reloading routes' )
+            const fullRouteDir = path.resolve( serverConfig.current.routeDir )
+            Promise.all(
+                fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
+                  .map(
+                      ( f ) => findRoutes( f, fullRouteDir + '/' + f.name )
+                  )
+            ).then(
+                routes => {
+                    state.initializing = false
+                    state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
+                }
+            )
+
+        }, 2000 )
     }
 
 }
 
 module.exports = {
-    current: state.routes,
     init,
     find: ( url ) => {
         let path = url.path.substr( 1 + ( serverConfig.current.routePrefix && serverConfig.current.routePrefix.length + 1 || 0 ) )

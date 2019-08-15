@@ -5,6 +5,7 @@ require( '../src/index' )(
             '.spliff': 'image/png'
         },
         watchFiles: true,
-        decodeQueryParameters: true
+        decodeQueryParameters: true,
+        cacheStatic: true
     }
 )
