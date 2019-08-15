@@ -75,7 +75,7 @@ const findRoutes = async( f, path ) => {
     return routes
 }
 
-const init = () => {
+const init = (now) => {
     if( !state.initializing ) {
         state.initializing = true
         //debounce fs events
@@ -94,7 +94,7 @@ const init = () => {
                 }
             )
 
-        }, 2000 )
+        }, now ? 0 : 100 )
     }
 
 }

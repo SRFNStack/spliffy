@@ -17,7 +17,7 @@ const spliffy = function( config ) {
     if( !config.hasOwnProperty( 'decodePathParameters' ) ) serverConfig.current.decodePathParameters = true
     serverConfig.current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
     serverConfig.current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
-    routes.init()
+    routes.init(true)
     let httpServer = http.createServer( handler.create( serverConfig.current ) )
     let port = config.port || 10420
     httpServer.listen( port )
