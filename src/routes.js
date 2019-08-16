@@ -82,6 +82,7 @@ const init = (now) => {
         setTimeout( () => {
             console.log( 'Reloading routes' )
             const fullRouteDir = path.resolve( serverConfig.current.routeDir )
+            if(!fs.existsSync(fullRouteDir)) throw `can't find route directory: ${fullRouteDir}`
             Promise.all(
                 fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
                   .map(

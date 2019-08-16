@@ -1,45 +1,57 @@
 # ![Alt text](spliffy_logo_text_small_1.png?raw=true "Spliffy Logo")
 
-> Node web framework with apache like dir based route config to get you lit quick
+> directory based routing inspired by apache with node server side scripting 
 
 ## Getting started
-Create a directory for your api and a root directory for your routes
+Create a directories for your app
 
-```mkdir -p ~/api/www```
+`mkdir -p ~/app/www`
 
 Install spliffy
 
-```cd ~/api && npm install --save spliffy```
+`cd ~/app && npm install spliffy`
 
-Then create a handler js file in that directory with the name of the end point. 
+Create a handler desired route name 
 
-```vi ~/api/www/spliffy.js```
+`vi ~/app/www/spliffy.js`
 ```js
 module.exports = {
-    GET: () => "hello spliffy"
+    GET: () => ({hello: "spliffy"})
 }
 ```
+the filename `spliffy.js` creates the path `/spliffy`
 
-Create the start script, ```vi ~/api/serve.js```, routeDir should be an absolute path. 
+Create the start script, ```vi ~/app/serve.js``` 
 ```js
 require('spliffy')({routeDir: __dirname+ '/www'})
 ```
+The object passed to spliffy is the config. See the [Config](#Config) section for more information.
+
+routeDir is the only required property and should be an absolute path.
+
+`10420` is the default port for http, and can be changed by setting the port in the config
+
 
 start the server
-```node ~/api/serve.js```
+`node ~/app/serve.js`
 
-Make a request to ```localhost:10420/spliffy```
+Go to `localhost:10420/spliffy`
+
+####[Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)
+
+##SSL
+Ssl can be enabled by setting the ssl.key and ssl.cert properties on the [config](#Config). The default ssl port is 14420.
 
 ### Static Files
 Any non-js files will be served verbatim from disk.
 
-You can watch files by setting watchFiles to true on the config. See the Caveats of doing that here: https://nodejs.org/docs/latest/api/fs.html#fs_caveats
+You can watch files by setting watchFiles to true on the config. See the Caveats of doing that [here](https://nodejs.org/docs/latest/api/fs.html#fs_caveats)
 
 Otherwise, If you add or rename files, you must restart the server for the changes to take effect.
 
 Any file prefixed with 'index.' (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.
 
-The extension determines the content-type of the file for the known types listed at mozilla.org: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
+The extension determines the content-type of the file for the known types listed at [mozilla.org](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types)
 
 You can also add custom extension to content-type mappings by setting the staticContentTypes property on the config.
 
@@ -47,7 +59,7 @@ GET is the only supported request method for static files, all other request met
 
 ETags will be generated on startup and will be recalculated if the file content changes. The cache-control max-age is set to 10min by default for static files.
 
-You can configure this with the staticCacheControl property of the config.
+You can configure this with the staticCacheControl property of the [config](#Config).
 
 If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to .static.js.
 
@@ -121,7 +133,12 @@ These are all of the settings available and their defaults. You can include just
     staticContentTypes: {
         '.foo': 'application/foo'
     },
-    staticCacheControl: "max-age=86400"
+    staticCacheControl: "max-age=86400",
+    ssl: {
+        key: "./certs/server.key",
+        cert: "./certs/server.cert",
+        port: 14420
+    }
 }
 ```
 
@@ -146,6 +163,11 @@ These are all of the settings available and their defaults. You can include just
 - **decodeQueryParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.
 - **watchFiles**: watch the files on disk for changes. Otherwise changes require a restart. false by default
 - **cacheStatic**: cache static files in memory to increase performance. false by default.
+- **ssl**: use https for all traffic. All traffic to the http port will be redirected to ssl
+    - **useLetsEncrypt**: TODO: Document letsencrypt support
+    - **key**: The ssl key file to use for https
+    - **cert**: The ssl cert file to use for https
+    - **port**: The port to listen on for https
 
 #### A note on Filters
 Filters can prevent the request from being handled by setting res.finished = true. This will short-circuit the filters
@@ -210,10 +232,9 @@ would handle:
 - ssl w/letsEncrypt certificate support
 - authentication/authorization filter with default and per handler configuration
 - compression
-- redirect helper function
 - caching filter
-- more robust content handling
 - multipart file handling
+- Server side rendering (aka templating/mvc)
 
 ### Breaking changes
 breaking changes are tracked in the breaking-changes.log
