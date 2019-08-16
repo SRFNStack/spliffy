@@ -4,6 +4,7 @@ const routes = require( './routes' )
 
 //Clone of https://github.com/publishlab/node-acme-client/blob/master/src/auto.js, but only sets up the http-01 challenge
 const setup = async( client, opts ) => {
+    console.log("Setting up let's encrypt ssl certificates...")
     const accountPayload = { termsOfServiceAgreed: opts.termsOfServiceAgreed }
 
     if( opts.email ) {
@@ -36,7 +37,6 @@ const setup = async( client, opts ) => {
         try {
             serverConfig.current.ssl.letsEncrypt.challenge = challenge
             serverConfig.current.ssl.letsEncrypt.keyAuthorization = keyAuthorization
-            console.log(serverConfig.current.ssl.letsEncrypt.keyAuthorization)
             await client.verifyChallenge( authz, challenge )
             await client.completeChallenge( challenge )
             await client.waitForValidStatus( challenge )

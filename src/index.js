@@ -43,7 +43,6 @@ const spliffy = async function( config ) {
             ( req, res ) => {
                 if(serverConfig.current.ssl.letsEncrypt.challenge && req.url.match("\.well-known/acme-challenge/"+serverConfig.current.ssl.letsEncrypt.challenge.token)){
                     res.writeHead( 200, {'Content-Type': 'text/plain; charset=utf-8'})
-                    console.log(serverConfig.current.ssl.letsEncrypt.keyAuthorization)
                     new PassThrough().end(Buffer.from(serverConfig.current.ssl.letsEncrypt.keyAuthorization, 'utf8')).pipe(res)
                 } else {
                     res.writeHead( 301, { 'Location': `https://${req.headers[ 'host' ].split( ':' )[ 0 ]}:${sslPort}${req.url}` } )
