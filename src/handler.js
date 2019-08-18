@@ -1,9 +1,9 @@
-const parseUrl = require('./parseUrl')
-const log = require('./log')
+const parseUrl = require( './parseUrl' )
+const log = require( './log' )
 const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD' ]
-const serverConfig = require('./serverConfig')
-const routes = require('./routes')
-const content = require('./content')
+const serverConfig = require( './serverConfig' )
+const routes = require( './routes' )
+const content = require( './content' )
 
 const handle = ( url, res, req, body, handler ) => {
     try {
@@ -49,11 +49,10 @@ const end = ( res, code, message, body ) => {
     res.end( body )
 }
 
-const logAccess = function( res, req ) {
+const logAccess = function( req, res ) {
     const start = new Date().getTime()
     res.on( 'finish', () => {
-        console.log( '[', new Date().toISOString(), ']',
-                     req.connection.remoteAddress, res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms' )
+        log.access( req.connection.remoteAddress, res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms' )
     } )
 }
 
@@ -88,42 +87,47 @@ const finalizeResponse = ( req, res, handled ) => {
     }
 }
 
-module.exports = {
-create( { filters, routePrefix } ) {
-    return ( req, res ) => {
-        logAccess( res, req )
-        let url = parseUrl( req.url )
-        let route = routes.find( url, routePrefix )
-        if( !route.handler ) {
-            end( res, 404, 'Not Found' )
-        } else if( req.method === 'OPTIONS' || ( route.handler && route.handler[ req.method ] ) ) {
-            try {
-                let reqBody = ''
-                req.on( 'data', data => reqBody += String( data ) )
-                req.on( 'end', () => {
-                    url.pathParameters = route.pathParameters
-                    if( filters ) {
-                        for( let filter of filters ) {
-                            filter( url, req, reqBody, res, route.handler )
-                            if( res.finished ) break
-                        }
+const handleRequest = async( req, res ) => {
+    let url = parseUrl( req.url )
+    let route = routes.find( url )
+    if( !route.handler ) {
+        end( res, 404, 'Not Found' )
+    } else if( req.method === 'OPTIONS' || ( route.handler && route.handler[ req.method ] ) ) {
+        try {
+            let reqBody = ''
+            req.on( 'data', data => reqBody += String( data ) )
+            req.on( 'end', () => {
+                url.pathParameters = route.pathParameters
+                if( serverConfig.current.filters ) {
+                    for( let filter of filters ) {
+                        filter( url, req, reqBody, res, route.handler )
+                        if( res.finished ) break
                     }
-                    if( req.method === 'OPTIONS' ) {
-                        res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
-                        end( res, 204 )
-                    } else {
-                        if( !res.finished ) {
-                            handle( url, res, req, reqBody, route.handler )
-                        }
+                }
+                if( req.method === 'OPTIONS' ) {
+                    res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
+                    end( res, 204 )
+                } else {
+                    if( !res.finished ) {
+                        handle( url, res, req, reqBody, route.handler )
                     }
-                } )
-            } catch(e) {
-                log.error( 'Handling request failed', e )
-                handleError( res, e )
-            }
-        } else {
-            end( res, 405, 'Method Not Allowed' )
+                }
+            } )
+        } catch(e) {
+            log.error( 'Handling request failed', e )
+            handleError( res, e )
         }
+    } else {
+        end( res, 405, 'Method Not Allowed' )
     }
 }
-}
+
+module.exports =
+    ( req, res ) => {
+        try {
+            logAccess( req, res )
+            return handleRequest( req, res )
+        } catch(e) {
+            log.error( 'Failed to request' )
+        }
+    }

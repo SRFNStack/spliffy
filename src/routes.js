@@ -2,6 +2,7 @@ const fs = require( 'fs' )
 const staticHandler = require( './staticHandler' )
 const path = require( 'path' )
 const serverConfig = require( './serverConfig' )
+const log = require('./log')
 const state = {
     routes: {},
     initializing: false,
@@ -56,6 +57,11 @@ const findRoutes = async( f, path ) => {
     } else if( f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
         let routeInfo = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
         routeInfo.route.handler = require( path )
+        Object.keys(routeInfo.route.handler).forEach(method=>{
+            if(!method.match("^[A-Z]+$")) {
+                throw `Method: ${method} in file ${path} is invalid. Method names must be all uppercase. You should not export properties other than the request methods you want to expose!`
+            }
+        })
         routes[ routeInfo.name ] = routeInfo.route
     } else {
         let route = {
@@ -80,7 +86,7 @@ const init = (now) => {
         state.initializing = true
         //debounce fs events
         setTimeout( () => {
-            console.log( 'Reloading routes' )
+            log.info( 'Loading routes' )
             const fullRouteDir = path.resolve( serverConfig.current.routeDir )
             if(!fs.existsSync(fullRouteDir)) throw `can't find route directory: ${fullRouteDir}`
             Promise.all(

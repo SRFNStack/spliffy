@@ -1,11 +1,18 @@
 const inspect = require( 'util' ).inspect
+const format = (args, level) => {
+    return `[${new Date().toISOString()}] [${level}]  ${args.map( a => typeof a === 'string' ? a : inspect( a, { depth: null } ) ).join( ' ' )}`
+}
 module.exports = {
     warning( e ) {
-        const args = [ ...arguments ].map( a => inspect( a, { depth: null } ) ).join( ' ' )
-        console.warn( `[Warn] [${new Date().toISOString()}] ${args}` )
+        console.warn(format([...arguments], 'WARN'))
+    },
+    info( e ) {
+        console.info(format([...arguments], 'INFO'))
+    },
+    access( e ) {
+        console.info(format([...arguments], 'ACCESS'))
     },
     error( e ) {
-        const args = [ ...arguments ].map( a => inspect( a, { depth: null } ) ).join( ' ' )
-        console.error( `[WTF] [${new Date().toISOString()}] ${args}` )
+        console.error(format([...arguments], 'ERROR'))
     }
 }

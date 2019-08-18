@@ -11,10 +11,11 @@ require( '../src/index' )(
         ssl: {
             port: 443,
             letsEncrypt: {
-                directory: "production",
+                directory: "staging",
                 termsOfServiceAgreed: true,
                 email: "r@snow87.com",
-                domains: ["spliffy.snow87.com"]
+                domains: ["spliffy.snow87.com"],
+                certPath: __dirname + "/certs/letsEncrypt"
             }
         }
     }

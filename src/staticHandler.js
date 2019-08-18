@@ -2,7 +2,6 @@ const contentTypes = require( './content-types.js' )
 const fs = require( 'fs' )
 const etag = require( 'etag' )
 const serverConfig = require( './serverConfig' )
-const log = require( './log' )
 const PassThrough = require( 'stream' ).PassThrough
 
 module.exports = {
