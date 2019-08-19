@@ -84,7 +84,7 @@ const createAccount = async( client, tosAgreed, email ) => {
 }
 
 /**
- The renewal time will be some minute between 2 weeks before the expiration date and the expiration date.
+ The renewal time will be some minute between 2 weeks before the expiration date and one hour before the expiration date.
  The date to renew is determined by adding a number of days determined by the sha1 hash of the cert,all of the machines network interface mac addresses and the os.hostname.
  This distribution is to avoid rate limiting issues caused by multiple servers with certificates for the same domain.
  lock files are used to prevent clobbering from multiple servers sharing the same files via nas or the like.
@@ -107,7 +107,7 @@ const renewIfNeeded = async( keyFile, certFile, accountKeyFile ) => {
     const oneMinute = 60000 // 60 seconds * 1000 milliseconds
     const twoWeeks = 1209600000 //oneMinute * 60 minutes * 24 hours * 7 days * 2
 
-    const maxRenewalDate = expirationDate
+    const maxRenewalDate = Math.max(expirationDate - oneMinute * 60, issueDate)
     const minRenewalDate = Math.max( expirationDate - twoWeeks, issueDate )
     const minutesBetween = Math.trunc( ( maxRenewalDate - minRenewalDate ) / oneMinute )
     const renewalDate = minRenewalDate + ( ( hash % minutesBetween ) * oneMinute )
