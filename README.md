@@ -55,7 +55,7 @@ Once you can do that, set config.secure.letsEncrypt to an object with at least t
 ```js
 {
     termsOfServiceAgreed: true,
-    directory: 'staging'    
+    directory: 'staging',    
     domains: ["hightimes.com","www.hightimes.com"],
     certPath: __dirname +"/certs"
 }
