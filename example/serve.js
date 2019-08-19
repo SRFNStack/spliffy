@@ -8,13 +8,13 @@ require( '../src/index' )(
         watchFiles: true,
         // decodeQueryParameters: true,
         cacheStatic: true,
-        ssl: {
+        secure: {
             port: 443,
             letsEncrypt: {
-                directory: "staging",
+                directory: "production",
                 termsOfServiceAgreed: true,
-                email: "r@snow87.com",
-                domains: ["spliffy.snow87.com"],
+                email: "public@spliffy.com",
+                domains: ["www.spliffy.dev"],
                 certPath: __dirname + "/certs/letsEncrypt"
             }
         }

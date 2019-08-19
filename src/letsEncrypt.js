@@ -5,17 +5,16 @@ const path = require( 'path' )
 const log = require( './log' )
 const os = require( 'os' )
 const forge = require( 'node-forge' )
-const https = require( 'https' )
-const handler = require( './handler' )
+const secure = require( './secure' )
 const challenges = {}
 const state = {
     current: {
         filesWatched: false,
-        initTriggerd: false
+        renewTriggered: false
     }
 }
 
-const orderNew = async( accountKey, leConfig ) => {
+const orderNew = async( accountKey, keyData, leConfig ) => {
     log.info( 'Ordering new let\'s encrypt certificate...' )
     let client = new acme.Client( {
                                       directoryUrl: acme.directory.letsencrypt[ leConfig.directory ],
@@ -39,16 +38,23 @@ const orderNew = async( accountKey, leConfig ) => {
             throw new Error( `Unable to select challenge for ${d}, no challenge found` )
         }
 
-        const keyAuthorization = await client.getChallengeKeyAuthorization( challenge )
+        if( challenge.status !== 'valid' ) {
+            const keyAuthorization = await client.getChallengeKeyAuthorization( challenge )
 
-        try {
-            challenges[ challenge.token ] = challenge
-            challenges[ challenge.token ].keyAuthorization = keyAuthorization
-            await client.verifyChallenge( authz, challenge )
-            await client.completeChallenge( challenge )
-            await client.waitForValidStatus( challenge )
-        } finally {
-            challenges[ challenge.token ] = null
+            try {
+                challenges[ challenge.token ] = challenge
+                challenges[ challenge.token ].keyAuthorization = keyAuthorization
+                log.info( 'Waiting to complete challenge for domain:', d )
+                await client.verifyChallenge( authz, challenge )
+                await client.completeChallenge( challenge )
+                await client.waitForValidStatus( challenge )
+            } catch(e) {
+                throw e
+            } finally {
+                challenges[ challenge.token ] = null
+            }
+        } else {
+            log.info( 'Domain:', d, 'already validated.' )
         }
     } )
 
@@ -61,11 +67,11 @@ const orderNew = async( accountKey, leConfig ) => {
         config.altNames = leConfig.domains.slice( 1 )
     }
 
-    const [ _, csr ] = await acme.forge.createCsr( config, serverConfig.current.ssl.keyData )
+    const [ _, csr ] = await acme.forge.createCsr( config, keyData )
     await client.finalizeOrder( order, csr )
     let cert = await client.getCertificate( order )
     log.info( 'Let\'s encrypt certificate created!' )
-    return Buffer.from(cert, 'utf8')
+    return Buffer.from( cert, 'utf8' )
 }
 
 const createAccount = async( client, tosAgreed, email ) => {
@@ -78,82 +84,76 @@ const createAccount = async( client, tosAgreed, email ) => {
 }
 
 /**
- The renewal date will be between 1 week after the issue date and 1 week before the expiration date.
- The date to renew is determined by adding a number of days determined by the sha1 hash of the cert and mac address.
+ The renewal time will be some minute between 2 weeks before the expiration date and the expiration date.
+ The date to renew is determined by adding a number of days determined by the sha1 hash of the cert,all of the machines network interface mac addresses and the os.hostname.
  This distribution is to avoid rate limiting issues caused by multiple servers with certificates for the same domain.
  lock files are used to prevent clobbering from multiple servers sharing the same files via nas or the like.
  watches are placed on the files and they are reloaded on any event and the server is re-initialized automatically.
  Only the certificate is replaced on renewal
  */
 const renewIfNeeded = async( keyFile, certFile, accountKeyFile ) => {
-    log.info("Checking letEncrypt renewal")
-    const cert = fs.readFileSync( certFile )
+    log.info( 'Checking if certificate needs renewal.' )
+    if(!fs.existsSync(keyFile)) throw "Key file missing, cannot renew cert"
+    const keyData = await loadOrGenKey( keyFile )
+    let certData = await loadOrGenCert( certFile, accountKeyFile, keyData, serverConfig.current.secure.letsEncrypt )
     const macs = Object.entries( os.networkInterfaces() ).reduce( ( interfaces, [ name, i ] ) => interfaces.concat( i ), [] ).map( i => i.mac ).sort().join( '' )
     const md = forge.md.sha1.create()
-    md.update( macs + cert.toString() )
+    md.update( macs + os.hostname() + certData.toString() )
     const hash = md.digest().toHex().slice( -4 ).toLowerCase().split( '' ).reduce( ( result, ch ) => result * 16 + '0123456789abcdefgh'.indexOf( ch ), 0 )
-    const certificate = forge.pki.certificateFromPem( cert )
+    const certificate = forge.pki.certificateFromPem( certData )
     const issueDate = certificate.validity.notBefore.getTime()
     const expirationDate = certificate.validity.notAfter.getTime()
 
-    const oneDay = 24 * 60 * 60 * 1000 //hours * minutes * seconds * milliseconds
-    const oneWeek = 7 * oneDay
+    const oneMinute = 60000 // 60 seconds * 1000 milliseconds
+    const twoWeeks = 1209600000 //oneMinute * 60 minutes * 24 hours * 7 days * 2
 
-    const maxRenewalDate = Math.max( expirationDate - oneWeek, issueDate )
-    const minRenewalDate = Math.min( issueDate + oneWeek, expirationDate )
-    const daysBetween = Math.trunc( ( maxRenewalDate - minRenewalDate ) / oneDay )
-    const renewalDate = minRenewalDate + ( ( hash % daysBetween ) * oneDay )
+    const maxRenewalDate = expirationDate
+    const minRenewalDate = Math.max( expirationDate - twoWeeks, issueDate )
+    const minutesBetween = Math.trunc( ( maxRenewalDate - minRenewalDate ) / oneMinute )
+    const renewalDate = minRenewalDate + ( ( hash % minutesBetween ) * oneMinute )
+
     if( renewalDate < new Date().getTime() ) {
         try {
             log.info( 'Let\'s Encrypt Certificate up for renewal. Ordering new certificate.' )
-            //ensure we have the latest private key before we issue new certs
-            serverConfig.current.ssl.keyData = await loadOrGenKey( keyFile )
-            serverConfig.current.ssl.certData = await loadOrGenCert( certFile, accountKeyFile, serverConfig.current.ssl.letsEncrypt, true )
-            restartHttps()
+            certData = await loadOrGenCert( certFile, accountKeyFile, keyData, serverConfig.current.secure.letsEncrypt, true )
         } catch(e) {
             log.error( 'Failed to order new certificate', e )
         }
     } else {
-        log.info("Certificate still valid.")
-        setTimeout( () => renewIfNeeded( keyFile, certFile, accountKeyFile ), oneDay / 4 )
+        log.info( 'Certificate valid.' )
     }
+    secure.updateIfChanged( keyData, certData )
 }
 
-const restartHttps = () => {
-    let oldServer = serverConfig.current.httpsServer
-    log.info("LetsEncrypt ssl information changed. Restarting https server.")
-    serverConfig.current.httpsServer = https.createServer(
-        {
-            key: serverConfig.current.ssl.keyData,
-            cert: serverConfig.current.ssl.certData
-        },
-        handler
-    )
-    oldServer.close( () => serverConfig.current.httpsServer.listen( serverConfig.current.ssl.port ) )
-    oldServer = null
-}
+const runEvery = ( fn, ms ) => fn().then(()=>setTimeout( () => runEvery( fn, ms ), ms ))
+
 //900,000ms == 5min
 const withLock = async( fn, maxWaitms = 900000 ) => {
+    log.info( 'Attempting to lock', serverConfig.current.secure.letsEncrypt.certPath, 'for up to', maxWaitms / 1000, 'seconds' )
     const started = new Date().getTime()
+    let waited = 0
     while( new Date().getTime() - started < maxWaitms ) {
         try {
-            fs.writeFileSync( serverConfig.current.ssl.letsEncrypt.certPath + '/.lock', process.pid, { flag: 'wx' } )
+            fs.writeFileSync( serverConfig.current.secure.letsEncrypt.certPath + '/.lock', process.pid, { flag: 'wx' } )
+            log.info( 'Got lock on', serverConfig.current.secure.letsEncrypt.certPath )
             const result = await fn()
-            fs.unlinkSync( serverConfig.current.ssl.letsEncrypt.certPath + '/.lock' )
+            fs.unlinkSync( serverConfig.current.secure.letsEncrypt.certPath + '/.lock' )
+            log.info( 'Released lock on', serverConfig.current.secure.letsEncrypt.certPath )
             return result
         } catch(e) {
-            await new Promise( res => setTimeout( res, 500 ) )
+            if( ++waited % 10 === 0 ) log.info( 'Still waiting for lock' )
+            await new Promise( res => setTimeout( res, 1000 ) )
         }
     }
-    throw `Waited too long for lock on certPath. Check ${serverConfig.current.ssl.letsEncrypt.certPath}/.lock for the pid holding the lock. Wait for the process or delete the lock file yourself then restart the server`
+    throw `Waited too long for lock on certPath. Check ${serverConfig.current.secure.letsEncrypt.certPath}/.lock for the pid holding the lock. Wait for the process or delete the lock file yourself then restart the server`
 }
 
 
 const loadOrGenKey = async( file ) => loadOrGenerate( file, async() => withLock( acme.forge.createPrivateKey ) )
 
-const loadOrGenCert = async( file, accountKeyFile, leConfig, forceGenerate ) => {
+const loadOrGenCert = async( file, accountKeyFile, keyData, leConfig, forceGenerate ) => {
     let accountKey = await loadOrGenKey( accountKeyFile )
-    return loadOrGenerate( file, async() => withLock( async() => orderNew( accountKey, leConfig ) ), forceGenerate )
+    return loadOrGenerate( file, async() => withLock( async() => orderNew( accountKey, keyData, leConfig ) ), forceGenerate )
 }
 
 const loadOrGenerate = async( file, generate, forceGenerate = false, tries = 0 ) => {
@@ -179,10 +179,10 @@ const loadOrGenerate = async( file, generate, forceGenerate = false, tries = 0 )
         return fs.readFileSync( file )
     }
 }
-const init = async(bootstrap) => {
-    let leConfig = serverConfig.current.ssl.letsEncrypt
+const init = async( bootstrap ) => {
+    let leConfig = serverConfig.current.secure.letsEncrypt
     verifyConfig( leConfig )
-
+    if( bootstrap ) secure.setAcmeChallengeProvider( ( token ) => challenges[ token ] )
     if( !fs.existsSync( leConfig.certPath ) ) {
         fs.mkdirSync( leConfig.certPath, { recursive: true } )
         log.info( 'Created cert directory', leConfig.certPath )
@@ -195,38 +195,28 @@ const init = async(bootstrap) => {
     let certExists = fs.existsSync( certFile )
     if( certExists && !fs.existsSync( keyFile ) )
         throw `The key for the provided cert ${certFile} is missing. Remove the cert file or provide the key to continue`
-
-    let lastKeyData = serverConfig.current.ssl.keyData
-    let lastCertData = serverConfig.current.ssl.certData
-
-    serverConfig.current.ssl.keyData = await loadOrGenKey( keyFile )
-    serverConfig.current.ssl.certData = await loadOrGenCert( certFile, accountKeyFile, leConfig )
-
-
-    if(!bootstrap && (
-        (lastCertData && !lastCertData.equals(serverConfig.current.ssl.certData))
-        ||(lastKeyData && !lastKeyData.equals(serverConfig.current.ssl.keyData)))
-    ) {
-        restartHttps()
-    }
-
+    const newKeyData = await loadOrGenKey( keyFile )
+    const newCertData = await loadOrGenCert( certFile, accountKeyFile, newKeyData, leConfig )
     if( bootstrap ) {
-        let triggerInit = ( file ) => () => {
-            if(!state.current.initTriggered ) {
-                state.current.initTriggered = true
+        secure.updateIfChanged( newKeyData, newCertData )
+
+        let triggerInitOnFsEvent = ( file ) => () => {
+            if( !state.current.renewTriggered ) {
+                state.current.renewTriggered = true
                 setTimeout( () => {
-                    log.info( 'letsEncrypt value change detected, re-initializing ssl' )
-                    init()
-                        .then( () => state.current.initTriggered = false )
-                }, 100 )
+                    log.info( 'Let\'s Encrypt file change detected' )
+                    renewIfNeeded( keyFile, certFile, accountKeyFile )
+                        .catch(log.error)
+                        .then( () => state.current.renewTriggered = false )
+                }, 500 )
             }
             return () => fs.unwatchFile( file )
         }
-        fs.watch( keyFile, triggerInit( keyFile ) )
-        fs.watch( accountKeyFile, triggerInit( accountKeyFile ) )
-        fs.watch( certFile, triggerInit( certFile ) )
+        fs.watch( keyFile, triggerInitOnFsEvent( keyFile ) )
+        fs.watch( accountKeyFile, triggerInitOnFsEvent( accountKeyFile ) )
+        fs.watch( certFile, triggerInitOnFsEvent( certFile ) )
     }
-    renewIfNeeded( keyFile, certFile, accountKeyFile )
+    setTimeout( () => runEvery( () => renewIfNeeded( keyFile, certFile, accountKeyFile ).catch(log.error), 10 * 60 * 1000 ) )
 
 }
 
@@ -244,19 +234,16 @@ const verifyConfig = ( leConfig ) => {
             throw 'wildcard domains are not supported because they require dns verification'
         }
     } )
-    if( serverConfig.current.ssl.port !== 443 || serverConfig.current.port !== 80 )
-        throw 'The port and ssl.port must be set to 80 and 443 in order to use let\'s encrypt. https://community.letsencrypt.org/t/support-for-ports-other-than-80-and-443-v3/63770/11'
+    if( serverConfig.current.secure.port !== 443 || serverConfig.current.port !== 80 )
+        throw 'The port and secure.port must be set to 80 and 443 in order to use let\'s encrypt. https://community.letsencrypt.org/t/support-for-ports-other-than-80-and-443-v3/63770/11'
 
     if( !leConfig.certPath )
         throw 'You must specify the directory to store your cert and private key. Keys and Certs need to be re-used as often as possible to avoid hitting rate-limits for issuing new certs as specified here: https://letsencrypt.org/docs/rate-limits/'
 
     if( ![ 'staging', 'production' ].includes( leConfig.directory ) )
-        throw `letsEncrypt.directory must be either 'staging' or 'production'. These map to require('acme-client').directory.letsencrypt`
+        throw `letsEncrypt.directory must be either 'staging' or 'production'. These map to require('acme-client').directory.letsencrypt[config.directory]`
 }
 
 module.exports = {
-    init,
-    challenge( token ) {
-        return challenges[ token ]
-    }
+    init
 }

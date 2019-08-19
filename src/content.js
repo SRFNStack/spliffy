@@ -1,15 +1,24 @@
-const contentHandlers=  {
+const serverConfig = require( './serverConfig' )
+
+const contentHandlers = {
     'application/json': {
         read: s => JSON.parse( s ),
         write: s => JSON.stringify( s )
     },
     '*/*': {
-        read: o => typeof o === 'object' ? JSON.parse( o ) : o && o.toString(),
+        read: o => {
+            if( typeof o === 'string' ) {
+                try {
+                    return JSON.parse( o )
+                } catch(e) {}
+            }
+            return o && o.toString()
+        },
         write: o => typeof o === 'object' ? JSON.stringify( o ) : o && o.toString()
     }
 }
 module.exports = {
-    handle( content, contentTypeHeader, defaultType, direction ) {
+    handle( content, contentTypeHeader, direction ) {
         if( content && content.length > 0 && contentTypeHeader ) {
             for( let contentType of contentTypeHeader.split( ',' ) ) {
                 contentType = contentType && contentType.toLowerCase()
@@ -19,7 +28,7 @@ module.exports = {
             }
 
         }
-        return { content: contentHandlers[ defaultType ][ direction ]( content ) }
+        return { content: contentHandlers[ serverConfig.current.acceptsDefault ][ direction ]( content ) }
     },
     contentHandlers
 }

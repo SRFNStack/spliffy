@@ -1,6 +1,6 @@
 # ![Alt text](spliffy_logo_text_small_1.png?raw=true "Spliffy Logo")
 
-> directory based routing inspired by apache with node server side scripting 
+> directory based routing with js request handlers and static file serving
 
 ## Getting started
 Create a directories for your app
@@ -11,26 +11,27 @@ Install spliffy
 
 `cd ~/app && npm install spliffy`
 
-Create a handler desired route name 
+Create a handler for the desired route name 
 
 `vi ~/app/www/spliffy.js`
 ```js
 module.exports = {
     GET: () => ({hello: "spliffy"})
 }
-```
-the filename `spliffy.js` creates the path `/spliffy`
 
+```
 Create the start script, ```vi ~/app/serve.js``` 
 ```js
 require('spliffy')({routeDir: __dirname+ '/www'})
 ```
+
+because the routeDir is ~/app/www, the filename `spliffy.js` creates the path `/spliffy`
+
 The object passed to spliffy is the config. See the [Config](#Config) section for more information.
 
 routeDir is the only required property and should be an absolute path.
 
 `10420` is the default port for http, and can be changed by setting the port in the config
-
 
 start the server
 `node ~/app/serve.js`
@@ -39,8 +40,72 @@ Go to `localhost:10420/spliffy`
 
 ####[Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)
 
-##SSL
-Ssl can be enabled by setting the ssl.key and ssl.cert properties on the [config](#Config). The default ssl port is 14420.
+##HTTPS
+HTTPS can be enabled by setting the secure.key and secure.cert properties on the [config](#Config). The default https port is 14420.
+
+###Let's Encrypt automated public CA trusted certs
+Let's encrypt is a free service that provides public trusted certificates to serve secure content to your users with.
+
+This service is provided by the [Internet Security Research Group](https://www.abetterinternet.org/), learn more [Here](https://letsencrypt.org/about/).
+
+To use this, you **MUST** be able to access your server from the internet at all of the specified domains on port 80 and 443. Other ports are not supported. 
+
+Once you can do that, set config.secure.letsEncrypt to an object with at least the following properties
+
+```js
+{
+    termsOfServiceAgreed: true,
+    directory: 'staging'    
+    domains: ["hightimes.com","www.hightimes.com"],
+    certPath: __dirname +"/certs"
+}
+ ``` 
+
+####termsOfServiceAgreed: true
+You must agree to the Subscriber Agreement found here: https://letsencrypt.org/repository/
+
+####directory: 'staging'
+The let's encrypt directory to use. Must me one of ['staging','production']. 
+
+Staging should be used to issue certificates for any pre-production purpose and has higher rate limits than production.
+
+####domains: ["hightimes.com","www.hightimes.com"]
+The list of domains that you want to obtain a certificate for
+*Wildcard domains are not supported because they can only be verified with a dns challenge and that requires access to the domain's dns configuration.*
+
+####certPath: '/opt/letsEncrypt/certs'
+The directory to read certs from and place certs we generate in. 
+
+*Ensure the cert directory is not contained in the routeDir! It would be really bad if someone downloaded your private key!*
+
+These must be stored on disk so they can be re-used. This is essential to avoid abusing the api and triggering rate limits.
+
+It's preferred that multiple servers share the same copy of the files, locks are used to prevent clobbering when renewals happen.
+
+Renewal times are distributed throughout the range of minutes between two weeks before the expiration date and the expiration date to avoid multiple servers
+from trying to renew the same domains at the same time and breaking rate limits
+
+This also helps lower the chance of clobbering when renewing certificates.
+
+Watches are placed on the files so if any server renews the cert, it will be detected by all servers and the server will be
+re-initialized with the new cert.
+
+You can see the rate limits here: https://letsencrypt.org/docs/rate-limits/ 
+
+#####Overview of how it works
+If we don't have a certificate already, or the certificate we have is up for renewal, we will place a new order for a certificate automatically.
+
+- An account is created ore retrieved using either the specified account key, or a generated one.
+- If a certificate key is provided it will be used to create the cert, one is generated if not provided. 
+- An order for a new certificate for the specified domains is placed to let's encrypt.
+- Let's encrypt responds with a challenge containing a token and an authorization value. 
+- The authorization is served at the url /.well-known/acme-challenge/$token for the duration of the challenge.
+- The server responds to Let's encrypt saying the challenge is ready, then polls until let's encrypt says the challenge is valid
+- Let's encrypt makes several GET /.well-known/acme-challenge/$token requests to domains specified
+- Our polling process detects that the challenge was passed and the cert is ready
+- The certs are downloaded and https is started/restarted on all servers watching the files
+
+Much better and far more detailed information can be found here:  https://letsencrypt.org/how-it-works/
 
 ### Static Files
 Any non-js files will be served verbatim from disk.
@@ -116,6 +181,8 @@ These are all of the settings available and their defaults. You can include just
 {
     port: 10420,
     routeDir: './www',
+    logLevel: 'INFO',
+    logAccess: true,
     routePrefix: "api",
     filters: [
         ( url, req, reqBody, res, handler) => {
@@ -134,16 +201,25 @@ These are all of the settings available and their defaults. You can include just
         '.foo': 'application/foo'
     },
     staticCacheControl: "max-age=86400",
-    ssl: {
-        key: "./certs/server.key",
-        cert: "./certs/server.cert",
-        port: 14420
+    https: {
+        key: "/opt/certs/server.key",
+        cert: "/opt/certs/server.cert",
+        port: 14420,
+        letsEncrypt: {
+                        directory: "staging",
+                        termsOfServiceAgreed: true,
+                        email: "public@spliffy.com",
+                        domains: ["www.spliffy.dev","spliffy.dev"],
+                        certPath: __dirname + "/certs/letsEncrypt"
+                    }
     }
 }
 ```
 
 - **port**: The port for the server to listen on
 - **routeDir**: The directory the routes are contained in, should be an absolute path
+- **logLevel**: The level at which to log. One of ['ERROR','WARN','INFO','DEBUG']. Default 'INFO'. You can use const {log} = require('spliffy') in your handlers
+- **logAccess**: Whether to log access to the server or not. Default true.
 - **routePrefix**: A prefix that will be included at the beginning of the path for every request. 
             For example, a request to /foo becomes /routePrefix/foo
 - **filters**: An array of functions to filter incoming requests
@@ -163,15 +239,19 @@ These are all of the settings available and their defaults. You can include just
 - **decodeQueryParameters**: run decodeURIComponent(param.replace(/\+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.
 - **watchFiles**: watch the files on disk for changes. Otherwise changes require a restart. false by default
 - **cacheStatic**: cache static files in memory to increase performance. false by default.
-- **ssl**: use https for all traffic. All traffic to the http port will be redirected to ssl
-    - **useLetsEncrypt**: TODO: Document letsencrypt support
-    - **key**: The ssl key file to use for https
-    - **cert**: The ssl cert file to use for https
+- **secure**: use https for all traffic. All traffic to the http port will be redirected to https
+    - **key**: The path to the key file to use for https
+    - **cert**: The path to the certificate file to use for https
     - **port**: The port to listen on for https
+    - **letsEncrypt**: Use let's encrypt to automatically issue trusted certificates. If this is set, key and cert are ignored.
+        - **termsOfServiceAgreed**: Whether you agree to the Subscriber Agreement: https://letsencrypt.org/repository/
+        - **directory**: The let's encrypt directory to use. Must me one of ['staging','production']
+        - **domains**: The array of domains that you want to obtain a certificate for. Wildcard domains are not supported.
+        - **certPath**: The directory to read certs from and place certs we generate in. 
+        - **email**: The optional email to use for registering an account.
 
-#### A note on Filters
-Filters can prevent the request from being handled by setting res.finished = true. This will short-circuit the filters
-and return immediately as soon as it has been set.
+#### Prevent handler execution with Filters
+To prevent the handler from executing the request, set res.finished = true. This will stop the request from processing through any more filters and will end the request.
 
 ## Routes
 Routes are based entirely on their directory structure much like they are in apache.
@@ -229,12 +309,12 @@ would handle:
 - /www/strains/blueDream/dankness/allOfIt
 
 ##### Feature backlog (ordered by priority)
-- ssl w/letsEncrypt certificate support
 - authentication/authorization filter with default and per handler configuration
 - compression
 - caching filter
 - multipart file handling
 - Server side rendering (aka templating/mvc)
+- proxy address trust and x-forwarded-for using proxy-addr 
 
 ### Breaking changes
 breaking changes are tracked in the breaking-changes.log

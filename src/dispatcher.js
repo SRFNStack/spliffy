@@ -7,7 +7,7 @@ const content = require( './content' )
 
 const handle = ( url, res, req, body, handler ) => {
     try {
-        body = content.handle( body, req.headers[ 'content-type' ], serverConfig.current.acceptsDefault, 'read' ).content
+        body = content.handle( body, req.headers[ 'content-type' ],'read' ).content
     } catch(e) {
         log.error( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
@@ -77,7 +77,7 @@ const finalizeResponse = ( req, res, handled ) => {
 
             let contentType = req.headers[ 'accept' ] || res.getHeader( 'content-type' )
 
-            let handledContent = content.handle( body, contentType, serverConfig.current.defaultContentType, 'write' )
+            let handledContent = content.handle( body, contentType, 'write' )
             let resBody = handledContent.content
             if( handledContent.contentType ) {
                 res.setHeader( 'content-type', handledContent.contentType )

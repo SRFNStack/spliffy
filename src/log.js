@@ -1,18 +1,28 @@
 const inspect = require( 'util' ).inspect
-const format = (args, level) => {
-    return `[${new Date().toISOString()}] [${level}]  ${args.map( a => typeof a === 'string' ? a : inspect( a, { depth: null } ) ).join( ' ' )}`
+const serverConfig = require('./serverConfig')
+
+const ifLevelEnabled = (fn, level, args) =>{
+    const configLevel = levelOrder[serverConfig.current.logLevel] || levelOrder.INFO
+    if(!levelOrder[level] || levelOrder[level] >= configLevel){
+        fn(`[${new Date().toISOString()}] [${level}]  ${args.map( a => typeof a === 'string' ? a : inspect( a, { depth: null } ) ).join( ' ' )}`)
+    }
 }
+
+const levelOrder = {DEBUG: 0,INFO: 1, WARN: 2, ERROR: 3}
+
 module.exports = {
     warning( e ) {
-        console.warn(format([...arguments], 'WARN'))
+        ifLevelEnabled(console.warn, 'WARN',[...arguments])
     },
     info( e ) {
-        console.info(format([...arguments], 'INFO'))
+        ifLevelEnabled(console.info, 'INFO',[...arguments])
     },
     access( e ) {
-        console.info(format([...arguments], 'ACCESS'))
+        if(serverConfig.current.logAccess) {
+            ifLevelEnabled(console.info, 'ACCESS',[...arguments])
+        }
     },
     error( e ) {
-        console.error(format([...arguments], 'ERROR'))
+        ifLevelEnabled(console.error, 'ERROR',[...arguments])
     }
 }
