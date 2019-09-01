@@ -19,7 +19,7 @@ const handle = ( url, res, req, body, handler ) => {
         if( !handled ) {
             end( res, 500, 'OOPS' )
         } else if( handled.then && typeof handled.then == 'function' ) {
-            handled.then( () => finalizeResponse( req, res ) )
+            handled.then( (h) => finalizeResponse( req, res, h ) )
                    .catch(
                        e => {
                            log.error( e )
