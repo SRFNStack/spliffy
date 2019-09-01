@@ -109,7 +109,11 @@ const init = (now) => {
 module.exports = {
     init,
     find: ( url ) => {
-        let path = url.path.substr( 1 + ( serverConfig.current.routePrefix && serverConfig.current.routePrefix.length + 1 || 0 ) )
+        let prefix = serverConfig.current.routePrefix
+        if( prefix && !url.path.startsWith("/"+prefix)) {
+            return {}
+        }
+        let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
         if( path === '' || path === '/' ) path = 'index'
         let nextPart = path.indexOf( '/' )
         let route = state.routes

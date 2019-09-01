@@ -20,7 +20,7 @@ const contentHandlers = {
 module.exports = {
     handle( content, contentTypeHeader, direction ) {
         if( content && content.length > 0 && contentTypeHeader ) {
-            for( let contentType of contentTypeHeader.split( ',' ) ) {
+            for( let contentType of contentTypeHeader.split( ',' ).split(";") ) {
                 contentType = contentType && contentType.toLowerCase()
                 if( contentHandlers[ contentType ] && typeof contentHandlers[ contentType ][ direction ] === 'function' ) {
                     return { contentType: contentType, content: contentHandlers[ contentType ][ direction ]( content ) }

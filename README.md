@@ -230,7 +230,7 @@ These are all of the settings available and their defaults. You can include just
     - **handler**: The request handler that will handle this request
 - **acceptsDefault**: The default mime type to use when accepting a request body. */* will convert objects from json by default
 - **defaultContentType**: The default mime type to use when writing content to a response. will convert objects to json by default
-- **contentHandlers**: Content negotiation handlers. mime types must be lower case.
+- **contentHandlers**: Content negotiation handlers keyed by the media type they handle. Media types must be all lower case.
     - **read**: A method to convert the request body to an object 
     - **write**: A method to convert the response body to a string
 - **staticContentTypes**: Custom file extension to content-type mappings. These overwrite default mappings from: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
