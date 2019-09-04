@@ -138,7 +138,6 @@ module.exports = {
     }
 }
 ```
-
 The exported properties are all caps request methods, any request method is allowed.
 
 Files named index.js can be created to handle the route of the name of the folder just like in apache.
@@ -175,6 +174,81 @@ If you need to set the statusCode, headers, etc, you must return an object with 
 }
 ```
 
+#### Route and Handler Metadata
+You may pass additional information to filters or request handlers on each request at the route level and at each method level.
+
+To pass route data you must set the `handlers` property on your default export, then all other properties are passed to filters and handlers as the `routeInfo` property.
+
+To pass method specific data set the method to an object with a `handler` property, then all other properties will be passed as the `methodInfo` property.
+```js
+module.exports = {
+    words: "Actin' funny, but I don't know why\n",
+    handlers: {
+        GET: {
+            words: async ()=>"'Scuse me while I kiss the sky",
+            handler: async ({url, body, headers, req, res, routeMeta, handlerMeta}) => ({        
+                body: {
+                    song: {
+                        title: 'Purple Haze', 
+                        artist: 'Jimi Hendrix', 
+                        words: routeMeta.words + (await handlerMeta.words()) 
+                    }
+                }
+            })
+        }
+    }
+}
+```
+
+##Security
+Use security to log in users. JWT is used by default to provide authentication and stateless session handling.
+ 
+Authorization can be applied at multiple levels and a default JWT implementation is provided.
+
+Roles can be applied at the following levels
+   - Application wide
+   - Specific path prefixes
+
+Roles from all levels are passed to the handler. 
+
+```js
+module.exports = {
+    secure: {users: ['space cowboy', 'gangster of love' ], roles: ['joker', 'smoker', 'mid-night toker']},
+    handlers: {
+        GET: {
+            secure: {users: ['Steve Miller'], roles: ['maurice']},
+            handler: ({url, body, headers, req, res}) => {        
+                body: "hello Mr. Marley"
+            }
+        }
+    }
+}
+```
+
+
+#####Application wide
+Enable security for every route. This takes precedence over 
+`config.auth.all = true` 
+
+Set roles using 
+
+`config.auth.appRoles = ['space cowboy']`
+
+
+#####A Whitelist of prefixes.
+_If set, this takes precedence over prefixes_
+
+**this is the preferred method of selecting paths**
+
+Specific Route: `config.auth.whitelist = ['/login','/home','/']`
+
+#####A list of prefixes
+_provided as a convenience method for when it's needed_
+`config.auth.prefixes = ['/secrets','/treasure','/candy']`
+
+#####
+
+####
 ## Config
 These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.
 ```js
@@ -185,7 +259,7 @@ These are all of the settings available and their defaults. You can include just
     logAccess: true,
     routePrefix: "api",
     filters: [
-        ( url, req, reqBody, res, handler) => {
+        ( {url, req, reqBody, res, handler, routeInfo, handlerInfo} ) => {
             res.finished = true
         }
     ]
@@ -222,12 +296,14 @@ These are all of the settings available and their defaults. You can include just
 - **logAccess**: Whether to log access to the server or not. Default true.
 - **routePrefix**: A prefix that will be included at the beginning of the path for every request. 
             For example, a request to /foo becomes /routePrefix/foo
-- **filters**: An array of functions to filter incoming requests
+- **filters**: An array of functions to filter incoming requests. An object with the following properties is passed to each filter before the request is handler.
     - **url**: See handler url argument
     - **req**: The un-adulterated node IncomingMessage request object
     - **reqBody**: The original unmodified request body
     - **res**: The un-adulterated node ServerResponse response object
     - **handler**: The request handler that will handle this request
+    - **routeInfo**: Meta information about the route
+    - **handlerInfo**: Meta information about the handler
 - **acceptsDefault**: The default mime type to use when accepting a request body. */* will convert objects from json by default
 - **defaultContentType**: The default mime type to use when writing content to a response. will convert objects to json by default
 - **contentHandlers**: Content negotiation handlers keyed by the media type they handle. Media types must be all lower case.
@@ -311,6 +387,7 @@ would handle:
 ##### Feature backlog (ordered by priority)
 - authentication/authorization filter with default and per handler configuration
 - compression
+- HTTP/2 with server push
 - caching filter
 - multipart file handling
 - Server side rendering (aka templating/mvc)

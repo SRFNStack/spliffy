@@ -1,2 +1,4 @@
 4.3.0
 handlers receive an object with properties instead of a list of parameters. This is to facilitate the use of object destructuring and to clean up the parameter list when you just need one property.
+4.5.0
+filters now receive an object like handlers do.

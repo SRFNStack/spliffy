@@ -2,7 +2,7 @@ const fs = require( 'fs' )
 const staticHandler = require( './staticHandler' )
 const path = require( 'path' )
 const serverConfig = require( './serverConfig' )
-const log = require('./log')
+const log = require( './log' )
 const state = {
     routes: {},
     initializing: false,
@@ -52,17 +52,36 @@ const findRoutes = async( f, path ) => {
               .map(
                   ( f ) => findRoutes( f, path + '/' + f.name )
               ) ).then(
-            routes => ({[routeInfo.name]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeInfo.route )} )
+            routes => ( { [ routeInfo.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeInfo.route ) } )
         )
     } else if( f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
-        let routeInfo = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
-        routeInfo.route.handler = require( path )
-        Object.keys(routeInfo.route.handler).forEach(method=>{
-            if(!method.match("^[A-Z]+$")) {
+        let routeData = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
+        let handlerFile = require( path )
+        let handlers = handlerFile.handlers || handlerFile
+        let handlerInfo = handlerFile.handlers &&
+                          Object.keys( handlerFile )
+                                .filter( k => k !== 'handlers' )
+                                .reduce( ( r, k ) => r[ k ] = handlerFile[ k ] )
+                                                || {}
+        routeData.route.handler = {}
+        routeData.route.routeInfo = handlerInfo
+        for( let method in handlers ) {
+            let handler = handlers[ method ].handler || handlers[ method ]
+            let handlerInfo = handlerFile.handler &&
+                              Object.keys( handlerFile )
+                                    .filter( k => k !== 'handler' )
+                                    .reduce( ( r, k ) => r[ k ] = handlerFile[ k ] )
+                              || {}
+            if( !method.match( '^[A-Z]+$' ) ) {
                 throw `Method: ${method} in file ${path} is invalid. Method names must be all uppercase. You should not export properties other than the request methods you want to expose!`
             }
-        })
-        routes[ routeInfo.name ] = routeInfo.route
+            if( typeof handler !== 'function' ) {
+                throw `Request method ${method} must be a function. Got: ${handlers[ method ]}`
+            }
+            routeData.route.handler[ method ] = handler
+            routeData.route.handlerInfo = handlerInfo
+        }
+        routes[ routeData.name ] = routeData.route
     } else {
         let route = {
             handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
@@ -81,14 +100,14 @@ const findRoutes = async( f, path ) => {
     return routes
 }
 
-const init = (now) => {
+const init = ( now ) => {
     if( !state.initializing ) {
         state.initializing = true
         //debounce fs events
         setTimeout( () => {
             log.info( 'Loading routes' )
             const fullRouteDir = path.resolve( serverConfig.current.routeDir )
-            if(!fs.existsSync(fullRouteDir)) throw `can't find route directory: ${fullRouteDir}`
+            if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
             Promise.all(
                 fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
                   .map(
@@ -110,7 +129,7 @@ module.exports = {
     init,
     find: ( url ) => {
         let prefix = serverConfig.current.routePrefix
-        if( prefix && !url.path.startsWith("/"+prefix)) {
+        if( prefix && !url.path.startsWith( '/' + prefix ) ) {
             return {}
         }
         let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )

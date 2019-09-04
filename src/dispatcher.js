@@ -5,7 +5,7 @@ const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
 
-const handle = ( url, res, req, body, handler ) => {
+const handle = ( url, res, req, body, handler, routeInfo, handlerInfo ) => {
     try {
         body = content.handle( body, req.headers[ 'content-type' ],'read' ).content
     } catch(e) {
@@ -15,7 +15,7 @@ const handle = ( url, res, req, body, handler ) => {
     }
 
     try {
-        let handled = handler[ req.method ]( { url, body, headers: req.headers, req, res } )
+        let handled = handler[ req.method ]( { url, body, headers: req.headers, req, res, routeInfo, handlerInfo } )
         if( !handled ) {
             end( res, 500, 'OOPS' )
         } else if( handled.then && typeof handled.then == 'function' ) {
@@ -100,7 +100,7 @@ const handleRequest = async( req, res ) => {
                 url.pathParameters = route.pathParameters
                 if( serverConfig.current.filters ) {
                     for( let filter of filters ) {
-                        filter( url, req, reqBody, res, route.handler )
+                        filter({url, req, reqBody, res, handler: route.handler, routeInfo: route.routeInfo, handlerInfo: route.handler.handlerInfo})
                         if( res.finished ) break
                     }
                 }
