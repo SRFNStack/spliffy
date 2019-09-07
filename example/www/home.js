@@ -1,14 +1,17 @@
+const marquee = require( '../templates/marquee' )
+
 module.exports = {
-    GET: () => ( {
+    GET: ({variant}) => ( {
         headers: {
             'content-type': 'text/html'
         },
         body: `
     <html>
     <body>
-    <marquee scrollamount="30">There's no place like home!</marquee>
+    ${marquee( 'javascript templating, no shenanigans!!' , 5)}
+    ${variant === "shenanigans" && marquee( 'maybe a little shenanigans',  10) || ""}
     </body>
     </html>
     `
-    } )
+    } ),
 }

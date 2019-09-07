@@ -235,7 +235,7 @@ const verifyConfig = ( leConfig ) => {
         }
     } )
     if( serverConfig.current.secure.port !== 443 || serverConfig.current.port !== 80 )
-        throw 'The port and secure.port must be set to 80 and 443 in order to use let\'s encrypt. https://community.letsencrypt.org/t/support-for-ports-other-than-80-and-443-v3/63770/11'
+        log.info('This server must be reachable via port 80 and port 443 at the domains you specified in your config for let\'s encrypt in order to renew and issue certificates. https://community.letsencrypt.org/t/support-for-ports-other-than-80-and-443-v3/63770/11')
 
     if( !leConfig.certPath )
         throw 'You must specify the directory to store your cert and private key. Keys and Certs need to be re-used as often as possible to avoid hitting rate-limits for issuing new certs as specified here: https://letsencrypt.org/docs/rate-limits/'

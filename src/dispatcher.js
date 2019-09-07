@@ -4,10 +4,13 @@ const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD
 const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
+const cookie = require( 'cookie' )
 
-const handle = ( url, res, req, body, handler, routeInfo, handlerInfo ) => {
+const setCookie = (res) => () => res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )
+
+const handle = ( url, res, req, body, handler, routeInfo, handlerInfo, filterInjected ) => {
     try {
-        body = content.handle( body, req.headers[ 'content-type' ],'read' ).content
+        body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
         log.error( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
@@ -15,11 +18,16 @@ const handle = ( url, res, req, body, handler, routeInfo, handlerInfo ) => {
     }
 
     try {
-        let handled = handler[ req.method ]( { url, body, headers: req.headers, req, res, routeInfo, handlerInfo } )
+        let handled = handler[ req.method ](
+            {
+                ...filterInjected,
+                setCookie: setCookie(res),
+                url, body, headers: req.headers, req, res, routeInfo, handlerInfo
+            } )
         if( !handled ) {
             end( res, 500, 'OOPS' )
         } else if( handled.then && typeof handled.then == 'function' ) {
-            handled.then( (h) => finalizeResponse( req, res, h ) )
+            handled.then( ( h ) => finalizeResponse( req, res, h ) )
                    .catch(
                        e => {
                            log.error( e )
@@ -87,8 +95,9 @@ const finalizeResponse = ( req, res, handled ) => {
     }
 }
 
-const handleRequest = async( req, res ) => {
+const handleRequest = async ( req, res ) => {
     let url = parseUrl( req.url )
+    req.cookies = req.headers.cookies && cookie.parse( req.headers.cookies ) || {}
     let route = routes.find( url )
     if( !route.handler ) {
         end( res, 404, 'Not Found' )
@@ -96,11 +105,26 @@ const handleRequest = async( req, res ) => {
         try {
             let reqBody = ''
             req.on( 'data', data => reqBody += String( data ) )
-            req.on( 'end', () => {
+            req.on( 'end', async () => {
                 url.pathParameters = route.pathParameters
+                let filterInjected = {}
                 if( serverConfig.current.filters ) {
-                    for( let filter of filters ) {
-                        filter({url, req, reqBody, res, handler: route.handler, routeInfo: route.routeInfo, handlerInfo: route.handler.handlerInfo})
+                    for( let filter of serverConfig.current.filters ) {
+                        const result = await filter( {
+                                                   ...filterInjected,
+                                                   url,
+                                                   req,
+                                                   reqBody,
+                                                   res,
+                                                   handler: route.handler,
+                                                   routeInfo: route.routeInfo,
+                                                   handlerInfo: route.handler.handlerInfo,
+                                                   setCookie: setCookie(res)
+                                               } )
+                        if( result ) {
+                            if( typeof result !== 'object' || Array.isArray( result ) ) throw 'filters must return objects.'
+                            filterInjected = { ...filterInjected, ...result }
+                        }
                         if( res.finished ) break
                     }
                 }
@@ -109,7 +133,7 @@ const handleRequest = async( req, res ) => {
                     end( res, 204 )
                 } else {
                     if( !res.finished ) {
-                        handle( url, res, req, reqBody, route.handler )
+                        handle( url, res, req, reqBody, route.handler, route.routeInfo, route.handler.handlerInfo, filterInjected )
                     }
                 }
             } )
