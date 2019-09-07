@@ -1,4 +1,4 @@
-# ![Alt text](spliffy_logo_text_small_1.png?raw=true "Spliffy Logo")
+# ![Alt text](spliffy_logo_text_small.png?raw=true "Spliffy Logo")
 
 > directory based routing with js request handlers and static file serving
 
