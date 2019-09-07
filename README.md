@@ -38,12 +38,12 @@ start the server
 
 Go to `localhost:10420/spliffy`
 
-####[Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)
+#### [Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)
 
-##HTTPS
+## HTTPS
 HTTPS can be enabled by setting the secure.key and secure.cert properties on the [config](#Config). The default https port is 14420.
 
-###Let's Encrypt automated public CA trusted certs
+### Let's Encrypt automated public CA trusted certs
 Let's encrypt is a free service that provides public trusted certificates to serve secure content to your users with.
 
 This service is provided by the [Internet Security Research Group](https://www.abetterinternet.org/), learn more [Here](https://letsencrypt.org/about/).
@@ -61,19 +61,19 @@ Once you can do that, set config.secure.letsEncrypt to an object with at least t
 }
  ``` 
 
-####termsOfServiceAgreed: true
+#### termsOfServiceAgreed: true
 You must agree to the Subscriber Agreement found here: https://letsencrypt.org/repository/
 
-####directory: 'staging'
+#### directory: 'staging'
 The let's encrypt directory to use. Must me one of ['staging','production']. 
 
 Staging should be used to issue certificates for any pre-production purpose and has higher rate limits than production.
 
-####domains: ["hightimes.com","www.hightimes.com"]
+#### domains: ["hightimes.com","www.hightimes.com"]
 The list of domains that you want to obtain a certificate for
 *Wildcard domains are not supported because they can only be verified with a dns challenge and that requires access to the domain's dns configuration.*
 
-####certPath: '/opt/letsEncrypt/certs'
+#### certPath: '/opt/letsEncrypt/certs'
 The directory to read certs from and place certs we generate in. 
 
 *Ensure the cert directory is not contained in the routeDir! It would be really bad if someone downloaded your private key!*
@@ -92,7 +92,7 @@ re-initialized with the new cert.
 
 You can see the rate limits here: https://letsencrypt.org/docs/rate-limits/ 
 
-#####Overview of how it works
+##### Overview of how it works
 If we don't have a certificate already, or the certificate we have is up for renewal, we will place a new order for a certificate automatically.
 
 - An account is created ore retrieved using either the specified account key, or a generated one.
@@ -200,7 +200,7 @@ module.exports = {
 }
 ```
 
-##Security
+## Security
 Use security to log in users. JWT is used by default to provide authentication and stateless session handling.
  
 Authorization can be applied at multiple levels and a default JWT implementation is provided.
@@ -226,7 +226,7 @@ module.exports = {
 ```
 
 
-#####Application wide
+##### Application wide
 Enable security for every route. This takes precedence over 
 `config.auth.all = true` 
 
@@ -235,20 +235,17 @@ Set roles using
 `config.auth.appRoles = ['space cowboy']`
 
 
-#####A Whitelist of prefixes.
+##### A Whitelist of prefixes.
 _If set, this takes precedence over prefixes_
 
 **this is the preferred method of selecting paths**
 
 Specific Route: `config.auth.whitelist = ['/login','/home','/']`
 
-#####A list of prefixes
+##### A list of prefixes
 _provided as a convenience method for when it's needed_
 `config.auth.prefixes = ['/secrets','/treasure','/candy']`
 
-#####
-
-####
 ## Config
 These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.
 ```js
