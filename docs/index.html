@@ -1,5 +1,360 @@
 <html lang="en">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/components/prism-javascript.min.js"
+            integrity="sha256-Fck6LA/qj8sXp1+RQhukXSoj2T3EBrl69L4QUV74Co8=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/prism.min.js"
+            integrity="sha256-HWJnMZHGx7U1jmNfxe4yaQedmpo/mtxWSIXvcJkLIf4=" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/themes/prism-twilight.min.css"
+          integrity="sha256-WMS43KJhmKW7Dj2jfTLRmMClthneLi4trxpIOI0vwo0=" crossorigin="anonymous"/>
+</head>
 <body>
-Spliffy!
+
+<h1 id="-alt-text-spliffy_logo_text_small-png-raw-true-spliffy-logo-"><img src="spliffy_logo_text_small.png" alt="Alt text" title="Spliffy Logo"></h1>
+<blockquote>
+    <p>directory based routing with js request handlers and static file serving</p>
+</blockquote>
+<h2 id="getting-started">Getting started</h2>
+<p>Create a directories for your app</p>
+<p><code>mkdir -p ~/app/www</code></p>
+<p>Install spliffy</p>
+<p><code>cd ~/app &amp;&amp; npm install spliffy</code></p>
+<p>Create a handler for the desired route name </p>
+<p><code>vi ~/app/www/spliffy.js</code></p>
+<pre><code class="lang-js"><span class="hljs-built_in">module</span>.exports = {
+    GET: <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> ({hello: <span class="hljs-string">"spliffy"</span>})
+}
+</code></pre>
+<p>Create the start script, <code>vi ~/app/serve.js</code> </p>
+<pre><code class="lang-js"><span class="hljs-function"><span class="hljs-title">require</span><span class="hljs-params">(<span class="hljs-string">'spliffy'</span>)</span><span class="hljs-params">({routeDir: __dirname+ <span class="hljs-string">'/www'</span>})</span></span>
+</code></pre>
+<p>because the routeDir is ~/app/www, the filename <code>spliffy.js</code> creates the path <code>/spliffy</code></p>
+<p>The object passed to spliffy is the config. See the <a href="#Config">Config</a> section for more information.</p>
+<p>routeDir is the only required property and should be an absolute path.</p>
+<p><code>10420</code> is the default port for http, and can be changed by setting the port in the config</p>
+<p>start the server
+    <code>node ~/app/serve.js</code></p>
+<p>Go to <code>localhost:10420/spliffy</code></p>
+<h4 id="-examples-https-github-com-narcolepticsnowman-spliffy-tree-master-example-"><a href="https://github.com/narcolepticsnowman/spliffy/tree/master/example">Examples</a></h4>
+<h2 id="https">HTTPS</h2>
+<p>HTTPS can be enabled by setting the secure.key and secure.cert properties on the <a href="#Config">config</a>. The default https port is 14420.</p>
+<h3 id="let-s-encrypt-automated-public-ca-trusted-certs">Let&#39;s Encrypt automated public CA trusted certs</h3>
+<p>Let&#39;s encrypt is a free service that provides public trusted certificates to serve secure content to your users with.</p>
+<p>This service is provided by the <a href="https://www.abetterinternet.org/">Internet Security Research Group</a>, learn more <a href="https://letsencrypt.org/about/">Here</a>.</p>
+<p>To use this, you <strong>MUST</strong> be able to access your server from the internet at all of the specified domains on port 80 and 443. Other ports are not supported. </p>
+<p>Once you can do that, set config.secure.letsEncrypt to an object with at least the following properties</p>
+<pre><code class="lang-js">{
+    <span class="hljs-attribute">termsOfServiceAgreed</span>: true,
+    directory: <span class="hljs-string">'staging'</span>,
+    domains: [<span class="hljs-string">"hightimes.com"</span>,<span class="hljs-string">"www.hightimes.com"</span>],
+    certPath: __dirname +<span class="hljs-string">"/certs"</span>
+}
+</code></pre>
+<h4 id="termsofserviceagreed-true">termsOfServiceAgreed: true</h4>
+<p>You must agree to the Subscriber Agreement found here: <a href="https://letsencrypt.org/repository/">https://letsencrypt.org/repository/</a></p>
+<h4 id="directory-staging-">directory: &#39;staging&#39;</h4>
+<p>The let&#39;s encrypt directory to use. Must me one of [&#39;staging&#39;,&#39;production&#39;]. </p>
+<p>Staging should be used to issue certificates for any pre-production purpose and has higher rate limits than production.</p>
+<h4 id="domains-hightimes-com-www-hightimes-com-">domains: [&quot;hightimes.com&quot;,&quot;www.hightimes.com&quot;]</h4>
+<p>The list of domains that you want to obtain a certificate for
+    <em>Wildcard domains are not supported because they can only be verified with a dns challenge and that requires access to the domain&#39;s dns configuration.</em></p>
+<h4 id="certpath-opt-letsencrypt-certs-">certPath: &#39;/opt/letsEncrypt/certs&#39;</h4>
+<p>The directory to read certs from and place certs we generate in. </p>
+<p><em>Ensure the cert directory is not contained in the routeDir! It would be really bad if someone downloaded your private key!</em></p>
+<p>These must be stored on disk so they can be re-used. This is essential to avoid abusing the api and triggering rate limits.</p>
+<p>It&#39;s preferred that multiple servers share the same copy of the files, locks are used to prevent clobbering when renewals happen.</p>
+<p>Renewal times are distributed throughout the range of minutes between two weeks before the expiration date and the expiration date to avoid multiple servers
+    from trying to renew the same domains at the same time and breaking rate limits</p>
+<p>This also helps lower the chance of clobbering when renewing certificates.</p>
+<p>Watches are placed on the files so if any server renews the cert, it will be detected by all servers and the server will be
+    re-initialized with the new cert.</p>
+<p>You can see the rate limits here: <a href="https://letsencrypt.org/docs/rate-limits/">https://letsencrypt.org/docs/rate-limits/</a> </p>
+<h5 id="overview-of-how-it-works">Overview of how it works</h5>
+<p>If we don&#39;t have a certificate already, or the certificate we have is up for renewal, we will place a new order for a certificate automatically.</p>
+<ul>
+    <li>An account is created ore retrieved using either the specified account key, or a generated one.</li>
+    <li>If a certificate key is provided it will be used to create the cert, one is generated if not provided. </li>
+    <li>An order for a new certificate for the specified domains is placed to let&#39;s encrypt.</li>
+    <li>Let&#39;s encrypt responds with a challenge containing a token and an authorization value. </li>
+    <li>The authorization is served at the url /.well-known/acme-challenge/$token for the duration of the challenge.</li>
+    <li>The server responds to Let&#39;s encrypt saying the challenge is ready, then polls until let&#39;s encrypt says the challenge is valid</li>
+    <li>Let&#39;s encrypt makes several GET /.well-known/acme-challenge/$token requests to domains specified</li>
+    <li>Our polling process detects that the challenge was passed and the cert is ready</li>
+    <li>The certs are downloaded and https is started/restarted on all servers watching the files</li>
+</ul>
+<p>Much better and far more detailed information can be found here:  <a href="https://letsencrypt.org/how-it-works/">https://letsencrypt.org/how-it-works/</a></p>
+<h3 id="static-files">Static Files</h3>
+<p>Any non-js files will be served verbatim from disk.</p>
+<p>You can watch files by setting watchFiles to true on the config. See the Caveats of doing that <a href="https://nodejs.org/docs/latest/api/fs.html#fs_caveats">here</a></p>
+<p>Otherwise, If you add or rename files, you must restart the server for the changes to take effect.</p>
+<p>Any file prefixed with &#39;index.&#39; (i.e. index.html, index.txt, index.png) will be served as the default file in the directory they are in.</p>
+<p>The extension determines the content-type of the file for the known types listed at <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types">mozilla.org</a></p>
+<p>You can also add custom extension to content-type mappings by setting the staticContentTypes property on the config.</p>
+<p>GET is the only supported request method for static files, all other request methods will result in a 405 Method Not Allowed.</p>
+<p>ETags will be generated on startup and will be recalculated if the file content changes. The cache-control max-age is set to 10min by default for static files.</p>
+<p>You can configure this with the staticCacheControl property of the <a href="#Config">config</a>.</p>
+<p>If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to .static.js.</p>
+<p>You can cache files in memory by setting cacheStatic to true on the config. If watchFiles is enabled these will be updated when the files change, if not the server will need a restart.</p>
+<h3 id="js-request-handler">JS Request Handler</h3>
+<pre><code class="lang-js">module<span class="hljs-selector-class">.exports</span> = {
+    GET: ({url, <span class="hljs-selector-tag">body</span>, headers, req, res}) =&gt; {
+        <span class="hljs-selector-tag">body</span>: <span class="hljs-string">"hello Mr. Marley"</span>
+    }
+}
+</code></pre>
+<p>The exported properties are all caps request methods, any request method is allowed.</p>
+<p>Files named index.js can be created to handle the route of the name of the folder just like in apache.</p>
+<p>Handler arguments:</p>
+<ul>
+    <li><strong>url</strong>: An object containing path and parameter information about the url<ul>
+        <li><strong>path</strong>: The path of the current request</li>
+        <li><strong>query</strong>: An object containing the query parameters. Not decoded by default. This can be configured by setting the decodePathParameters to true.</li>
+        <li><strong>pathParameters</strong>: parameters that are part of the path. Not decoded by default. This can be configured by setting the decodeQueryParameters to true.</li>
+    </ul>
+    </li>
+    <li><strong>body</strong>: The body of the request</li>
+    <li><strong>headers</strong>: The request headers</li>
+    <li><strong>req</strong>: The un-adulterated node http.IncomingMessage</li>
+    <li><strong>res</strong>: The un-adulterated node http.ServerResponse</li>
+</ul>
+<h4 id="handler-return">Handler Return</h4>
+<p>The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type.
+    The default, application/json, is already set.</p>
+<p>If the returned value is Falsey, we will assume everything is fine and return a 200 OK.</p>
+<p>You can return a promise that resolves to the response value, and the server will respond with the resolved value.</p>
+<p>If you need to set the statusCode, headers, etc, you must return an object with a body property for the body and optionally one or more of the following properties</p>
+<pre><code class="lang-js">{
+    <span class="hljs-attribute">headers</span>: {
+        <span class="hljs-string">"cache-control"</span>: <span class="hljs-string">'no-cache'</span>
+    },
+    <span class="hljs-selector-tag">body</span>: {
+        <span class="hljs-attribute">some</span>: <span class="hljs-string">'object'</span>
+    },
+    <span class="hljs-selector-tag">statusCode</span>: 420,
+    <span class="hljs-selector-tag">statusMessage</span>: "<span class="hljs-selector-tag">Enhance</span> <span class="hljs-selector-tag">Your</span> <span class="hljs-selector-tag">Calm</span>"
+}
+</code></pre>
+<h4 id="route-and-handler-metadata">Route and Handler Metadata</h4>
+<p>You may pass additional information to filters or request handlers on each request at the route level and at each method level.</p>
+<p>To pass route data you must set the <code>handlers</code> property on your default export, then all other properties are passed to filters and handlers as the <code>routeInfo</code> property.</p>
+<p>To pass method specific data set the method to an object with a <code>handler</code> property, then all other properties will be passed as the <code>methodInfo</code> property.</p>
+<pre><code class="lang-js">module<span class="hljs-selector-class">.exports</span> = {
+    words: <span class="hljs-string">"Actin' funny, but I don't know why\n"</span>,
+    handlers: {
+        GET: {
+            words: async ()=&gt;<span class="hljs-string">"'Scuse me while I kiss the sky"</span>,
+            handler: async ({url, <span class="hljs-selector-tag">body</span>, headers, req, res, routeMeta, handlerMeta}) =&gt; ({
+                <span class="hljs-selector-tag">body</span>: {
+                    song: {
+                        title: <span class="hljs-string">'Purple Haze'</span>,
+                        artist: <span class="hljs-string">'Jimi Hendrix'</span>,
+                        words: routeMeta<span class="hljs-selector-class">.words</span> + (await handlerMeta.words())
+                    }
+                }
+            })
+        }
+    }
+}
+</code></pre>
+<h2 id="security">Security</h2>
+<p>Use security to log in users. JWT is used by default to provide authentication and stateless session handling.</p>
+<p>Authorization can be applied at multiple levels and a default JWT implementation is provided.</p>
+<p>Roles can be applied at the following levels</p>
+<ul>
+    <li>Application wide</li>
+    <li>Specific path prefixes</li>
+</ul>
+<p>Roles from all levels are passed to the handler. </p>
+<pre><code class="lang-js">module.exports = {
+    secure: {users: [<span class="hljs-string">'space cowboy'</span>, <span class="hljs-string">'gangster of love'</span> ], roles: [<span class="hljs-string">'joker'</span>, <span class="hljs-string">'smoker'</span>, <span class="hljs-string">'mid-night toker'</span>]},
+    handlers: {
+        GET: {
+            secure: {users: [<span class="hljs-string">'Steve Miller'</span>], roles: [<span class="hljs-string">'maurice'</span>]},
+            handler: ({url, body, headers, req, res}) =&gt; {
+                body: <span class="hljs-string">"hello Mr. Marley"</span>
+            }
+        }
+    }
+}
+</code></pre>
+<h5 id="application-wide">Application wide</h5>
+<p>Enable security for every route. This takes precedence over
+    <code>config.auth.all = true</code> </p>
+<p>Set roles using </p>
+<p><code>config.auth.appRoles = [&#39;space cowboy&#39;]</code></p>
+<h5 id="a-whitelist-of-prefixes-">A Whitelist of prefixes.</h5>
+<p><em>If set, this takes precedence over prefixes</em></p>
+<p><strong>this is the preferred method of selecting paths</strong></p>
+<p>Specific Route: <code>config.auth.whitelist = [&#39;/login&#39;,&#39;/home&#39;,&#39;/&#39;]</code></p>
+<h5 id="a-list-of-prefixes">A list of prefixes</h5>
+<p><em>provided as a convenience method for when it&#39;s needed</em>
+    <code>config.auth.prefixes = [&#39;/secrets&#39;,&#39;/treasure&#39;,&#39;/candy&#39;]</code></p>
+<h2 id="config">Config</h2>
+<p>These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.</p>
+<pre><code class="lang-js">{
+    por<span class="hljs-variable">t:</span> <span class="hljs-number">10420</span>,
+    routeDir: <span class="hljs-string">'./www'</span>,
+    logLeve<span class="hljs-variable">l:</span> <span class="hljs-string">'INFO'</span>,
+    logAcces<span class="hljs-variable">s:</span> true,
+    routePrefix: <span class="hljs-string">"api"</span>,
+    <span class="hljs-built_in">filter</span><span class="hljs-variable">s:</span> [
+        ( {url, req, reqBody, <span class="hljs-keyword">res</span>, handler, routeInfo, handlerInfo} ) =&gt; {
+            <span class="hljs-keyword">res</span>.finished = true
+        }
+    ]
+    acceptsDefaul<span class="hljs-variable">t:</span> <span class="hljs-string">"*/*"</span>,
+    defaultContentType: <span class="hljs-string">"*/*"</span>,
+    contentHandler<span class="hljs-variable">s:</span> {
+        <span class="hljs-string">'application/json'</span>: {
+            <span class="hljs-keyword">read</span>: requestBody =&gt; JSON.parse(requestBody),
+            <span class="hljs-keyword">write</span>: responseBody =&gt; JSON.stringify(responseBody)
+        }
+    },
+    staticContentType<span class="hljs-variable">s:</span> {
+        <span class="hljs-string">'.foo'</span>: <span class="hljs-string">'application/foo'</span>
+    },
+    staticCacheContro<span class="hljs-variable">l:</span> <span class="hljs-string">"max-age=86400"</span>,
+    http<span class="hljs-variable">s:</span> {
+        key: <span class="hljs-string">"/opt/certs/server.key"</span>,
+        cer<span class="hljs-variable">t:</span> <span class="hljs-string">"/opt/certs/server.cert"</span>,
+        por<span class="hljs-variable">t:</span> <span class="hljs-number">14420</span>,
+        letsEncryp<span class="hljs-variable">t:</span> {
+                        directory: <span class="hljs-string">"staging"</span>,
+                        termsOfServiceAgreed: true,
+                        emai<span class="hljs-variable">l:</span> <span class="hljs-string">"public@spliffy.com"</span>,
+                        domain<span class="hljs-variable">s:</span> [<span class="hljs-string">"www.spliffy.dev"</span>,<span class="hljs-string">"spliffy.dev"</span>],
+                        certPath: __dirname + <span class="hljs-string">"/certs/letsEncrypt"</span>
+                    }
+    }
+}
+</code></pre>
+<ul>
+    <li><strong>port</strong>: The port for the server to listen on</li>
+    <li><strong>routeDir</strong>: The directory the routes are contained in, should be an absolute path</li>
+    <li><strong>logLevel</strong>: The level at which to log. One of [&#39;ERROR&#39;,&#39;WARN&#39;,&#39;INFO&#39;,&#39;DEBUG&#39;]. Default &#39;INFO&#39;. You can use const {log} = require(&#39;spliffy&#39;) in your handlers</li>
+    <li><strong>logAccess</strong>: Whether to log access to the server or not. Default true.</li>
+    <li><strong>routePrefix</strong>: A prefix that will be included at the beginning of the path for every request. <pre><code>      <span class="hljs-keyword">For</span> example, a <span class="hljs-built_in">request</span> <span class="hljs-keyword">to</span> /foo becomes /routePrefix/foo
+</code></pre></li>
+    <li><strong>filters</strong>: An array of functions to filter incoming requests. An object with the following properties is passed to each filter before the request is handler.<ul>
+        <li><strong>url</strong>: See handler url argument</li>
+        <li><strong>req</strong>: The un-adulterated node IncomingMessage request object</li>
+        <li><strong>reqBody</strong>: The original unmodified request body</li>
+        <li><strong>res</strong>: The un-adulterated node ServerResponse response object</li>
+        <li><strong>handler</strong>: The request handler that will handle this request</li>
+        <li><strong>routeInfo</strong>: Meta information about the route</li>
+        <li><strong>handlerInfo</strong>: Meta information about the handler</li>
+    </ul>
+    </li>
+    <li><strong>acceptsDefault</strong>: The default mime type to use when accepting a request body. <em>/</em> will convert objects from json by default</li>
+    <li><strong>defaultContentType</strong>: The default mime type to use when writing content to a response. will convert objects to json by default</li>
+    <li><strong>contentHandlers</strong>: Content negotiation handlers keyed by the media type they handle. Media types must be all lower case.<ul>
+        <li><strong>read</strong>: A method to convert the request body to an object </li>
+        <li><strong>write</strong>: A method to convert the response body to a string</li>
+    </ul>
+    </li>
+    <li><strong>staticContentTypes</strong>: Custom file extension to content-type mappings. These overwrite default mappings from: <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types">https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types</a></li>
+    <li><strong>staticCacheControl</strong>: Custom value for the Cache-Control header of static files</li>
+    <li><strong>decodePathParameters</strong>: run decodeURIComponent(param.replace(/+/g,&quot;%20&quot;)) on each path parameter value. true by default.</li>
+    <li><strong>decodeQueryParameters</strong>: run decodeURIComponent(param.replace(/+/g,&quot;%20&quot;)) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.</li>
+    <li><strong>watchFiles</strong>: watch the files on disk for changes. Otherwise changes require a restart. false by default</li>
+    <li><strong>cacheStatic</strong>: cache static files in memory to increase performance. false by default.</li>
+    <li><strong>secure</strong>: use https for all traffic. All traffic to the http port will be redirected to https<ul>
+        <li><strong>key</strong>: The path to the key file to use for https</li>
+        <li><strong>cert</strong>: The path to the certificate file to use for https</li>
+        <li><strong>port</strong>: The port to listen on for https</li>
+        <li><strong>letsEncrypt</strong>: Use let&#39;s encrypt to automatically issue trusted certificates. If this is set, key and cert are ignored.<ul>
+            <li><strong>termsOfServiceAgreed</strong>: Whether you agree to the Subscriber Agreement: <a href="https://letsencrypt.org/repository/">https://letsencrypt.org/repository/</a></li>
+            <li><strong>directory</strong>: The let&#39;s encrypt directory to use. Must me one of [&#39;staging&#39;,&#39;production&#39;]</li>
+            <li><strong>domains</strong>: The array of domains that you want to obtain a certificate for. Wildcard domains are not supported.</li>
+            <li><strong>certPath</strong>: The directory to read certs from and place certs we generate in. </li>
+            <li><strong>email</strong>: The optional email to use for registering an account.</li>
+        </ul>
+        </li>
+    </ul>
+    </li>
+</ul>
+<h4 id="prevent-handler-execution-with-filters">Prevent handler execution with Filters</h4>
+<p>To prevent the handler from executing the request, set res.finished = true. This will stop the request from processing through any more filters and will end the request.</p>
+<h2 id="routes">Routes</h2>
+<p>Routes are based entirely on their directory structure much like they are in apache.</p>
+<p>Example dir:</p>
+<ul>
+    <li>www<ul>
+        <li>strains<ul>
+            <li>gorillaGlue.js</li>
+            <li>blueDream.js</li>
+            <li>indica<ul>
+                <li>index.js</li>
+            </ul>
+            </li>
+            <li>sativa<ul>
+                <li>index.js</li>
+                <li>smokeit.js</li>
+            </ul>
+            </li>
+            <li>index.js</li>
+        </ul>
+        </li>
+    </ul>
+    </li>
+</ul>
+<p>This would create the following route mappings:</p>
+<ul>
+    <li>/strains/ &gt; /www/strains/index.js</li>
+    <li>/strains/gorillaGlue &gt; /www/strains/gorillaGlue.js</li>
+    <li>/strains/blueDream &gt; /www/strains/blueDream.js</li>
+    <li>/strains/indica/ &gt; /www/strains/indica/index.js</li>
+    <li>/strains/sativa/ &gt; /www/strains/sativa/index.js</li>
+    <li>/strains/sativa/smokeit &gt; /www/strains/sativa/smokeit.js</li>
+</ul>
+<h4 id="path-variables">Path variables</h4>
+<p>You can include path variables by prefixing the folder or file name with a $</p>
+<p>Example dir:</p>
+<ul>
+    <li>www<ul>
+        <li>strains<ul>
+            <li>$strainName<ul>
+                <li>info</li>
+            </ul>
+            </li>
+        </ul>
+        </li>
+    </ul>
+    </li>
+</ul>
+<p>would handle:</p>
+<ul>
+    <li>/www/strains/gorillaGlue/info</li>
+    <li>/www/strains/blueDream/info</li>
+</ul>
+<p>The path parameters are available in the pathParameters object on the first argument passed to the handler</p>
+<p>The variable will be the folder or file name excluding the $, i.e. $strainName -&gt; { strainName: &#39;gorillaGlue&#39;}</p>
+<p>**You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn&#39;t be defined. </p>
+<h4 id="catchall-path">Catchall path</h4>
+<p>You can make a handler handle all requests that start with the given path by appending a + to the file or folder name.</p>
+<p>Example dir:</p>
+<ul>
+    <li>www<ul>
+        <li>strains+.js</li>
+    </ul>
+    </li>
+</ul>
+<p>would handle:</p>
+<ul>
+    <li>/www/strains/gorillaGlue/info/something/more/stuff</li>
+    <li>/www/strains/blueDream/dankness/allOfIt</li>
+</ul>
+<h5 id="feature-backlog-ordered-by-priority-">Feature backlog (ordered by priority)</h5>
+<ul>
+    <li>authentication/authorization filter with default and per handler configuration</li>
+    <li>compression</li>
+    <li>HTTP/2 with server push</li>
+    <li>caching filter</li>
+    <li>multipart file handling</li>
+    <li>Server side rendering (aka templating/mvc)</li>
+    <li>proxy address trust and x-forwarded-for using proxy-addr </li>
+</ul>
+<h3 id="breaking-changes">Breaking changes</h3>
+<p>breaking changes are tracked in the breaking-changes.log</p>
+
 </body>
 </html>
