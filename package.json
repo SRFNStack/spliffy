@@ -28,6 +28,7 @@
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
     "jsonwebtoken": "^8.5.1",
-    "node-forge": "^0.8.5"
+    "node-forge": "^0.8.5",
+    "uuid": "^3.3.3"
   }
 }
