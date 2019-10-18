@@ -96,6 +96,8 @@ export default div(
     li( strong( 'staticCacheControl' ), ': Custom value for the Cache-Control header of static files' ),
     li( strong( 'decodePathParameters' ),
         ': run decodeURIComponent(param.replace(/+/g,"%20")) on each path parameter value. true by default.' ),
+    li( strong( 'staticMode' ),
+        ': if true, the server will only serve static content and will not execute js request handlers. ' ),
     li( strong( 'decodeQueryParameters' ),
         ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.' ),
     li( strong( 'watchFiles' ),

@@ -54,7 +54,7 @@ const findRoutes = async( f, path ) => {
               ) ).then(
             routes => ( { [ routeInfo.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeInfo.route ) } )
         )
-    } else if( f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
+    } else if( !serverConfig.current.staticMode && f.name.endsWith( '.js' ) && !f.name.endsWith( '.static.js' ) ) {
         let routeData = getRouteInfo( f.name.substr( 0, f.name.length - 3 ), routes )
         let handlerFile = require( path )
         let handlers = handlerFile.handlers || handlerFile
@@ -62,7 +62,7 @@ const findRoutes = async( f, path ) => {
                           Object.keys( handlerFile )
                                 .filter( k => k !== 'handlers' )
                                 .reduce( ( r, k ) => r[ k ] = handlerFile[ k ] )
-                                                || {}
+                          || {}
         routeData.route.handler = {}
         routeData.route.routeInfo = handlerInfo
         for( let method in handlers ) {
