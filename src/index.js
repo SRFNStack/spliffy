@@ -1,6 +1,6 @@
 const log = require( './log' )
-const start = require('./start')
-const cluster = require('cluster')
+const start = require( './start' )
+const cluster = require( 'cluster' )
 
 /**
  * Startup function for the spliffy server
@@ -11,24 +11,26 @@ const cluster = require('cluster')
  */
 let consecutiveFailures = 0
 let lastStart = new Date().getTime()
-const spliffy = (config)=>{
-    if(cluster.isMaster){
+const spliffy = ( config ) => {
+    if( cluster.isMaster ) {
         cluster.fork()
-        cluster.on('exit', (worker)=>{
-            log.info('Server crashed, restarting in 100ms')
+        cluster.on( 'exit', ( worker ) => {
+
             const now = new Date().getTime()
-            if(now - lastStart <= 1000) {
+            if( now - lastStart <= 1000 ) {
                 consecutiveFailures++
             } else {
                 consecutiveFailures = 0
             }
-            setTimeout(()=>{
+            const waitms = Math.pow( 2, consecutiveFailures ) * 100
+            log.error( `Server crashed, restarting in ${waitms}ms` )
+            setTimeout( () => {
                 cluster.fork()
                 lastStart = new Date().getTime()
-            }, Math.pow(2,consecutiveFailures) * 100 )
-        })
+            }, waitms )
+        } )
     } else {
-        start(config)
+        start( config )
     }
 }
 
