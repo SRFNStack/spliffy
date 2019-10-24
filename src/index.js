@@ -12,7 +12,7 @@ const spliffy = (config)=>{
         cluster.fork()
         cluster.on('exit', (worker)=>{
             log.info('Server crashed, restarting in 100ms')
-            setTimeout(()=>cluster.fork, 100)
+            setTimeout(()=>cluster.fork(), 100)
         })
     } else {
         start(config)
