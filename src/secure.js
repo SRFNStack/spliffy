@@ -9,7 +9,6 @@ const dispatcher = require('./dispatcher')
 
 const state = {
     server: null,
-    redirectServer: null,
     port: 14420,
     keyData: null,
     certData: null,
@@ -19,7 +18,7 @@ const state = {
 
 const startHttpRedirect = () => {
     //redirect http to https
-    state.redirectServer = http.createServer(
+    http.createServer(
         ( req, res ) => {
             try {
                 if( req.url.startsWith( '/.well-known/acme-challenge/' ) ) {
@@ -38,7 +37,7 @@ const startHttpRedirect = () => {
                 log.error( 'Failed to handle http request on port ' + serverConfig.current.port, req.url, e )
             }
         } )
-   state.redirectServer.listen( serverConfig.current.port )
+        .listen( serverConfig.current.port )
 }
 
 module.exports = {
@@ -52,9 +51,6 @@ module.exports = {
     },
     setAcmeChallengeProvider: ( provider ) => {
         state.acmeChallengeProvider = provider
-    },
-    getServers(){
-        return {server: state.server, redirectServer: state.redirectServer}
     },
     startHttpRedirect,
     updateIfChanged: ( newKeyData, newCertData ) => {
