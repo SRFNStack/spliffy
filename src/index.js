@@ -1,5 +1,4 @@
 const log = require( './log' )
-const start = require( './start' )
 const cluster = require( 'cluster' )
 
 /**
@@ -30,7 +29,7 @@ const spliffy = ( config ) => {
             }, waitms )
         } )
     } else {
-        start( config )
+        require( './start' )( config )
     }
 }
 
