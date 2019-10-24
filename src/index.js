@@ -3,8 +3,8 @@ const serverConfig = require( './serverConfig' )
 const dispatcher = require( './dispatcher' )
 const content = require( './content' )
 const routes = require( './routes' )
-const secure = require('./secure')
-const letsEncrypt = require('./letsEncrypt')
+const secure = require( './secure' )
+const letsEncrypt = require( './letsEncrypt' )
 const log = require( './log' )
 const defaultHeaders = {
     acceptsDefault: '*/*',
@@ -16,7 +16,7 @@ const defaultHeaders = {
  * @param config See https://github.com/narcolepticsnowman/spliffy#config
  * @returns {Promise<void>} an empty promise...
  */
-const spliffy = function( config ) {
+const spliffy = async function( config ) {
     if( !config || !config.routeDir ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
     }
@@ -39,30 +39,48 @@ const spliffy = function( config ) {
         } )
     }
 
-    if(!serverConfig.current.hasOwnProperty('logAccess')){
+    if( !serverConfig.current.hasOwnProperty( 'logAccess' ) ) {
         serverConfig.current.logAccess = true
     }
     serverConfig.current.port = config.port || 10420
     routes.init( true )
 
 
-    if( config.secure ) {
+    let httpServer
 
-        if( config.secure.letsEncrypt ) {
-            letsEncrypt.init( true )
-                       .catch( e => {
-                           setTimeout( () => {throw e} )
-                       } )
+    //Promise to be healthy
+    const startServer = () => new Promise( ( resolve ) => {
+        try {
+            if( config.secure ) {
 
-        } else {
-            secure.startHttps( config.secure)
+                if( config.secure.letsEncrypt ) {
+                    letsEncrypt.init( true )
+                               .catch( e => {
+                                   setTimeout( () => {throw e} )
+                               } )
+
+                } else {
+                    secure.startHttps( config.secure )
+                }
+                secure.startHttpRedirect()
+            } else {
+                httpServer = http.createServer( dispatcher )
+                                 .listen( serverConfig.current.port )
+                log.info( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
+            }
+        } catch(e) {
+            resolve(e)
+            log.error( 'Is it getting hot in here?', e )
+            const secureServers = secure.getServers()
+            if( secureServers.redirectServer ) secureServers.redirectServer.close( () => {} )
+            if( secureServers.server ) secureServers.server.close( () => {log.error( 'server stopped' )} )
+            if( httpServer ) httpServer.close( () => {log.error( 'server stopped' )} )
+            setTimeout(
+                startServer
+                , 100 )
         }
-        secure.startHttpRedirect()
-    } else {
-        http.createServer( dispatcher )
-            .listen( serverConfig.current.port )
-        log.info( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
-    }
+    } )
+    return startServer()
 }
 
 /**

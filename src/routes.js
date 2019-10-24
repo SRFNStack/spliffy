@@ -144,6 +144,8 @@ module.exports = {
             } else if( route.variable ) {
                 pathParameters[ route.variable.key ] = serverConfig.current.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
                 route = route.variable || {}
+            } else {
+                route = {}
             }
 
             if( nextPart > -1 && ( route && !route.catchall ) ) {
