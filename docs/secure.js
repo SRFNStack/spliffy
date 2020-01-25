@@ -8,8 +8,8 @@ export default div( p( 'HTTPS can be enabled by setting the secure.key and secur
 
 
                     h3( { id: 'let-s-encrypt-automated-public-ca-trusted-certs' },
-                        'Let"s Encrypt automated public CA trusted certs' ),
-                    p( 'Let"s encrypt is a free service that provides public trusted certificates to serve secure content to your users with.' ),
+                        'Let\'s Encrypt automated public CA trusted certs' ),
+                    p( 'Let\'s encrypt is a free service that provides public trusted certificates to serve secure content to your users with.' ),
                     p( 'This service is provided by the ',
                        a( { href: 'https://www.abetterinternet.org/' }, 'Internet Security Research Group' ),
                        ' learn more ',
