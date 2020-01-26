@@ -33,7 +33,7 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                     ) ),
                     p( 'The exported properties are all caps request methods, any request method is allowed.' ),
                     p( 'Files named index.js can be created to handle the route of the name of the folder just like in apache.' ),
-                    p( 'Handler arguments:' ),
+                    h3({id: 'handler-arguments'}, 'Handler arguments:' ),
                     ul(
                         li( strong( 'url' ), ': An object containing path and parameter information about the url',
                             ul(
