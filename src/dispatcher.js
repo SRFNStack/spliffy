@@ -100,7 +100,7 @@ const handleRequest = async ( req, res ) => {
     req.cookies = req.headers.cookies && cookie.parse( req.headers.cookies ) || {}
     let route = routes.find( url )
     if(!route.handler && serverConfig.current.notFoundRoute) {
-        route = routes.find(serverConfig.current.notFoundRoute)
+        route = routes.find(parseUrl(serverConfig.current.notFoundRoute))
     }
     if( !route.handler ) {
         end( res, 404, 'Not Found' )
