@@ -97,7 +97,7 @@ const finalizeResponse = ( req, res, handled ) => {
 
 const handleRequest = async ( req, res ) => {
     let url = parseUrl( req.url )
-    req.cookies = req.headers.cookies && cookie.parse( req.headers.cookies ) || {}
+    req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
     let route = routes.find( url )
     if(!route.handler && serverConfig.current.notFoundRoute) {
         route = routes.find(parseUrl(serverConfig.current.notFoundRoute))
