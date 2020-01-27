@@ -46,7 +46,7 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                         ),
                         li( strong( 'body' ), ': The body of the request' ),
                         li( strong( 'headers' ), ': The request headers' ),
-                        li( strong( 'req' ), ': The un-adulterated node http.IncomingMessage' ),
+                        li( strong( 'req' ), ': The node http.IncomingMessage with the additional property \'cookies\' that contains the cookies as parsed by the cookie library' ),
                         li( strong( 'res' ), ': The un-adulterated node http.ServerResponse' )
                     ),
 
