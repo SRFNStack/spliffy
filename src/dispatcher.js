@@ -6,7 +6,7 @@ const routes = require( './routes' )
 const content = require( './content' )
 const cookie = require( 'cookie' )
 
-const setCookie = (res) => () => res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )
+const setCookie = (res) => function(){return  res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 
 const handle = ( url, res, req, body, handler, routeInfo, handlerInfo, filterInjected ) => {
     try {
