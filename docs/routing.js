@@ -1,4 +1,4 @@
-import { div, h3, li, p, pre, ul } from './fnelements.js'
+import { div, h3, li, p, pre, strong, ul } from './fnelements.js'
 import prismCode from './prismCode.js'
 
 export default div(
@@ -62,7 +62,7 @@ export default div(
         li( '/www/strains/gorillaGlue/info' ),
         li( '/www/strains/blueDream/info' )
     ),
-    p( 'The path parameters are available in the pathParameters object on the first argument passed to the handler' ),
+    p( 'The path parameters are available in the ',strong('pathParameters'),' object on the first argument passed to the handler' ),
     p( 'The variable will be the folder or file name excluding the $, i.e. $strainName -> { strainName: "gorillaGlue"}' ),
     p( '**You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn"t be defined. ' ),
 
@@ -94,14 +94,14 @@ export default div(
     h3( { id: 'route-and-handler-metadata' }, 'Route and Handler Metadata' ),
     p( 'You may pass additional information to filters or request handlers on each request at the route level and at each method level.' ),
     p( 'To pass route data you must set the ',
-       prismCode( 'handlers' ),
+       strong( 'handlers' ),
        ' property on your default export, then all other properties are passed to filters and handlers as the ',
-       prismCode( 'routeInfo' ),
+       strong( 'routeInfo' ),
        ' property.' ),
     p( 'To pass method specific data set the method to an object with a ',
-       prismCode( 'handler' ),
+       strong( 'handler' ),
        ' property, then all other properties will be passed as the ',
-       prismCode( 'methodInfo' ),
+       strong( 'methodInfo' ),
        ' property.' ),
     p( 'This is useful for cases where a filter or handler needs to know something about the route or handler.' ),
     pre( prismCode( `module.exports = {
