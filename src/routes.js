@@ -33,16 +33,6 @@ const getRouteInfo = ( name, routes ) => {
 
 const findRoutes = async( f, path ) => {
     let routes = {}
-    if( serverConfig.current.watchFiles ) {
-        try {
-            fs.watch( path, '', () => init() )
-        } catch(e) {
-            try {
-                fs.unwatchFile( path )
-            } catch(e) {}
-            init()
-        }
-    }
     if( f.isDirectory() ) {
 
         let routeInfo = getRouteInfo( f.name, routes )

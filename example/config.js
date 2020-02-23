@@ -7,7 +7,6 @@ module.exports = ( env ) =>
         staticContentTypes: {
             '.spliff': 'image/png'
         },
-        watchFiles: env !== 'prod',
         // decodeQueryParameters: true,
         cacheStatic: true,
         filters: [ () => ( { shenanigans: true } ), variantFilter ],

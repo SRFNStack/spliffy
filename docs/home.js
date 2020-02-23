@@ -77,6 +77,6 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                         li( 'multipart file handling' ),
                         li( 'Server side rendering (aka templating/mvc' ),
                         li( 'proxy address trust and x-forwarded-for using proxy-addr' ),
-                        li( 'Production mode that disables watching and instead refuses start up if new files are added since the last start up until it\'s placed on a whitelist. The whitelist can be deleted and all files will be added at start up.' )
+                        li( 'Production mode that creates a manifest containing all of the known routes, any files not in the manifest won\'t be loaded. This will prevent routes being added at runtime.' )
                     ),
                     )

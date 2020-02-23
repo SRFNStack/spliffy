@@ -102,8 +102,6 @@ export default div(
             ': if true, the server will only serve static content and will not execute js request handlers. ' ),
         li( strong( 'decodeQueryParameters' ),
             ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.' ),
-        li( strong( 'watchFiles' ),
-            ': watch the files on disk for changes. Otherwise changes require a restart. false by default ' ),
         li( strong( 'cacheStatic' ), ': cache static files in memory to increase performance. false by default.' ),
         li( strong( 'auth' ), ': Use authentication.',
             ul(
