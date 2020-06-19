@@ -12,6 +12,5 @@ export default div( p( 'Any non-js files will be served verbatim from disk.' ),
                     p( 'You can configure this with the staticCacheControl property of the ',
                        a( { href: '#Config' }, 'config' ),
                        '.' ),
-                    p( 'If you want to serve a .js file as a static file instead of having it be a route handler, change the extension to.static.js.' ),
                     p( 'You can cache files in memory by setting cacheStatic to true on the config.' )
 )

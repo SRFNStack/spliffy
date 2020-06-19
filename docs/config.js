@@ -65,10 +65,9 @@ export default div(
         li( strong( 'routePrefix' ),
             ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo' ),
         li( strong( 'notFoundRoute' ),
-            ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo' ),
+            ': The route to use for the not found page. This can also be used as a catchall for single page apps.' ),
         li( strong( 'filters' ),
-            ': The route to use for the not found page. This can also be used as a catchall for single page apps. ',
-            'properties is passed to each filter before the request is handler.',
+            ': Functions to filter requests. All filters must return true for the request to be accepted. ',
             ul(
                 li( strong( 'url' ), ': The url being filtered' ),
                 li( strong( 'req' ), ': The un-adulterated node IncomingMessage request object' ),
