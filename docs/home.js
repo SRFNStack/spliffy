@@ -13,7 +13,7 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                     prismCode( 'module.exports = {\n    GET:() => ({hello: "spliffy"})\n}' ),
                     p( 'Create the start script, ', prismCode( 'vi ~/app/serve.js' ) ),
                     pre( prismCode( 'require(\'spliffy\')({routeDir: __dirname+ \'/www\'})' ) ),
-                    p( 'The spliffy.js file in ~/app/www creates the route',
+                    p( 'The spliffy.rt.js file in ~/app/www creates the route',
                        prismCode( '/spliffy' ) ),
                     p( 'See ',fnlink( { to: '/config' }, 'Config' ),' for a complete set of options.' ),
                     p( 'routeDir is the only required property and should be an absolute path.' ),
@@ -32,7 +32,7 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
 }`
                     ) ),
                     p( 'The exported properties are all caps request methods, any request method is allowed.' ),
-                    p( 'Files named index.js can be created to handle the route of the name of the folder just like in apache.' ),
+                    p( 'Files named index.rt.js can be created to handle the route of the name of the folder just like in apache.' ),
                     h3({id: 'handler-arguments'}, 'Handler arguments:' ),
                     ul(
                         li( strong( 'url' ), ': An object containing path and parameter information about the url',

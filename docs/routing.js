@@ -9,20 +9,20 @@ export default div(
             ul(
                 li( 'strains',
                     ul(
-                        li( 'gorillaGlue.js' ),
-                        li( 'blueDream.js' ),
+                        li( 'gorillaGlue.rt.js' ),
+                        li( 'blueDream.rt.js' ),
                         li( 'indica',
                             ul(
-                                li( 'index.js' )
+                                li( 'index.rt.js' )
                             )
                         ),
                         li( 'sativa',
                             ul(
-                                li( 'index.js' ),
-                                li( 'smokeit.js' )
+                                li( 'index.rt.js' ),
+                                li( 'smokeit.rt.js' )
                             )
                         ),
-                        li( 'index.js' )
+                        li( 'index.rt.js' )
                     )
                 )
             )
@@ -31,11 +31,11 @@ export default div(
     p( 'This would create the following route mappings:' ),
     ul(
         li( '/strains/ > /www/strains/index.js' ),
-        li( '/strains/gorillaGlue > /www/strains/gorillaGlue.js' ),
-        li( '/strains/blueDream > /www/strains/blueDream.js' ),
-        li( '/strains/indica/ > /www/strains/indica/index.js' ),
-        li( '/strains/sativa/ > /www/strains/sativa/index.js' ),
-        li( '/strains/sativa/smokeit > /www/strains/sativa/smokeit.js' )
+        li( '/strains/gorillaGlue > /www/strains/gorillaGlue.rt.js' ),
+        li( '/strains/blueDream > /www/strains/blueDream.rt.js' ),
+        li( '/strains/indica/ > /www/strains/indica/index.rt.js' ),
+        li( '/strains/sativa/ > /www/strains/sativa/index.rt.js' ),
+        li( '/strains/sativa/smokeit > /www/strains/sativa/smokeit.rt.js' )
     ),
 
 
@@ -73,7 +73,7 @@ export default div(
     ul(
         li( 'www',
             ul(
-                li( 'strains+.js' )
+                li( 'strains+.rt.js' )
             )
         )
     ),
