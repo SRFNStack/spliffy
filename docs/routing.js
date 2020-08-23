@@ -64,7 +64,7 @@ export default div(
     ),
     p( 'The path parameters are available in the ',strong('pathParameters'),' object on the first argument passed to the handler' ),
     p( 'The variable will be the folder or file name excluding the $, i.e. $strainName -> { strainName: "gorillaGlue"}' ),
-    p( '**You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn"t be defined. ' ),
+    p( '**You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn\'t be defined. ' ),
 
 
     h3( { id: 'catchall-path' }, 'Catchall path' ),
