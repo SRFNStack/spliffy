@@ -39,9 +39,9 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                             ul(
                                 li( strong( 'path' ), ': The path of the current request' ),
                                 li( strong( 'query' ),
-                                    ': An object containing the query parameters. Not decoded by default. This can be configured by setting the decodePathParameters to true.' ),
+                                    ': An object containing the query parameters. Not decoded by default. This can be configured by setting the decodeQueryParameters to true.' ),
                                 li( strong( 'pathParameters' ),
-                                    ': parameters that are part of the path. Not decoded by default. This can be configured by setting the decodeQueryParameters to true.' )
+                                    ': parameters that are part of the path. Not decoded by default. This can be configured by setting the decodePathParameters to true.' )
                             )
                         ),
                         li( strong( 'body' ), ': The body of the request' ),
