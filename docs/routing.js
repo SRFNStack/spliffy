@@ -83,7 +83,7 @@ export default div(
         li( '/www/strains/blueDream/dankness/allOfIt' )
     ),
     h3( { id: 'filters' }, 'Filters' ),
-    p( 'Requests can be filtered using functions. The filter must return an object or no value. ' ),
+    p( 'Requests can be filtered using functions. If the return is falsey, the request will not proceed and a 405 status code will be returned. ' ),
     p( 'If an object is returned, it\'s properties will be included on the object passed to any remaining filters and the request handler.' ),
     p( 'This can be used for injecting any kind of data into your handlers.' ),
     p( 'To stop execution of filters, and end the request,' ),

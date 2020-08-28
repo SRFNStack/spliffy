@@ -125,8 +125,11 @@ const handleRequest = async ( req, res ) => {
                                                    setCookie: setCookie(res)
                                                } )
                         if( result ) {
-                            if( typeof result !== 'object' || Array.isArray( result ) ) throw 'filters must return objects.'
-                            filterInjected = { ...filterInjected, ...result }
+                            if(typeof result !== 'object' || Array.isArray( result )){
+                                filterInjected = { ...filterInjected, ...result }
+                            }
+                        } else {
+                            end(res, 405 )
                         }
                         if( res.finished ) break
                     }

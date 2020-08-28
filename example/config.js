@@ -3,15 +3,15 @@ const variantFilter = require('./variantFilter')
 module.exports = ( env ) =>
     ( {
         routeDir: __dirname + '/www',
-        port: 80,
+        port: 82,
         staticContentTypes: {
             '.spliff': 'image/png'
         },
         // decodeQueryParameters: true,
         cacheStatic: true,
-        filters: [ () => ( { shenanigans: true } ), variantFilter ],
+        filters: [ () => ( { shenanigans: true } ), variantFilter, ()=>true ],
         secure: {
-            port: 443,
+            port: 4445,
             letsEncrypt: {
                 directory: env === 'prod' ? 'production' : 'staging',
                 termsOfServiceAgreed: true,
