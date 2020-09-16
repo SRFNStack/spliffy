@@ -27,7 +27,7 @@
     "acme-client": "^3.0.0",
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
-    "node-forge": "^0.8.5",
+    "node-forge": "^0.10.0",
     "uuid": "^3.3.3"
   }
 }
