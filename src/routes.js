@@ -38,59 +38,138 @@ const getNewRouteData = ( name, routes ) => {
 }
 
 /**
- * Recursively walk the specified directory to discover all of the routes and middleware
- * @param f The file or directory to search for routes
- * @param path The full path to the current file
- * @returns {Promise<{} | Promise<(Promise<(Promise<T | never>|{})[] | never>|{})[] | never>>}
+ * middleware is stored as an object where the properties are request methods the middleware applies to
+ * if a middleware applies to all methods, the property ALL is used
+ * example:
+ * {
+ *     GET: [(req,res,next)=>console.log('ice cream man')]
+ *     POST: [(req,res,next)=>console.log('gelato')]
+ *     ALL: [(req,res,next)=>console.log('bruce banner')]
+ * }
  */
-const findRoutes = async( f, path ) => {
-    let routes = {}
-    if( f.isDirectory() ) {
+const mergeMiddleware = ( incoming, existing ) => {
+    const mergeInto = cloneMiddleware(existing)
 
-        let routeData = getNewRouteData( f.name, routes )
-
-        return Promise.all(
-            fs.readdirSync( path, { withFileTypes: true } )
-              .map(
-                  ( f ) => findRoutes( f, path + '/' + f.name )
-              ) ).then(
-            routes => ( { [ routeData.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeData.route ) } )
-        )
-    } else if( !serverConfig.current.staticMode && f.name.endsWith( '.rt.js' )) {
-        let routeData = getNewRouteData( f.name.substr( 0, f.name.length - '.rt.js'.length ), routes )
-        routes[ routeData.name ] = {...(routes[routeData.name] || {}), ...buildRoute(routeData.route, path)}
-    } else if( !serverConfig.current.staticMode && f.name.endsWith( '.mw.js' )){
-        let routeData = getNewRouteData( f.name.substr( 0, f.name.length - '.mw.js'.length ), routes )
-        let middleware = require(path)
-        if(!middleware.middleware){
-            throw new Error(".mw.js files must export a middleware property")
-        }
-        routes[routeData.name] = {...(routes[routeData.name] || {}), middleware: middleware.middleware }
-    } else {
-        let route = {
-            handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
-            static: true
-        }
-        if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
-            routes[ f.name.split( '.html' )[ 0 ] ] = route
-            routes[ f.name ] = route
-        } else if( f.name.startsWith( 'index.' ) ) {
-            routes[ f.name ] = route
-            routes[ 'index' ] = route
-        } else {
-            routes[ f.name ] = route
+    validateMiddleware( incoming )
+    if( Array.isArray( incoming ) ) {
+        mergeInto.ALL = incoming.concat( existing.ALL || [] )
+    } else if( typeof incoming === 'object' ) {
+        for( let method in incoming ) {
+            let upMethod = method.toUpperCase()
+            mergeInto[ upMethod ] = ( incoming[ upMethod ] || [] ).concat( mergeInto[ upMethod ] || [] )
         }
     }
+    return mergeInto
+}
+
+const cloneMiddleware = (middleware)=>{
+    const clone = { ...middleware }
+    for( let method in middleware ) {
+        middleware[ method ] = [ ...middleware[ method ] ]
+    }
+    return clone
+}
+
+/**
+ * Ensure the given middleware is valid
+ * @param middleware
+ */
+export const validateMiddleware = ( middleware ) => {
+    if( Array.isArray( middleware ) )
+        validateMiddlewareArray( middleware )
+
+    else if( typeof middleware === 'object' ) {
+        for( let method in middleware ) {
+            //ensure methods are always available as uppercase
+            let upMethod = method.toUpperCase()
+            middleware[ upMethod ] = middleware[ method ]
+            validateMiddlewareArray( middleware[ upMethod ] )
+        }
+    } else {
+        throw new Error( 'Invalid middleware definition: ' + middleware )
+    }
+}
+
+const validateMiddlewareArray = ( arr ) => {
+    if( !Array.isArray( arr ) )
+        throw 'middleware must be an array of functions'
+
+    arr.forEach( f => {
+        if( typeof f !== 'function' ) {
+            throw 'Each element in the array of middleware must be a function'
+        }
+    } )
+}
+
+/**
+ * Recursively walk the specified directory to discover all of the routes and middleware
+ * @param currentFile The file or directory to search for routes
+ * @param path The full path to the current file
+ * @param inheritedMiddleware Middleware that is inherited from the app or parent routes
+ * @returns {Promise<{} | Promise<(Promise<(Promise<T | never>|{})[] | never>|{})[] | never>>}
+ */
+const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
+    let routes = {}
+    if( currentFile.isDirectory() ) {
+
+        let routeData = getNewRouteData( currentFile.name, routes )
+
+        const files = fs.readdirSync( path, { withFileTypes: true } )
+
+        const routeMiddleware = files
+            .filter( f => f.name.endsWith( '.mw.js' ) )
+            .map( f => {
+                let exports = require( path + '/' + f.name )
+                if( !exports.middleware ) {
+                    throw new Error( '.mw.js files must export a middleware property' )
+                }
+                validateMiddleware( exports.middleware )
+                return exports.middleware
+            } )
+            .reduce((incoming, result)=>mergeMiddleware(incoming, result), inheritedMiddleware)
+
+        return Promise.all( files
+                                .filter( f => !f.name.endsWith( '.mw.js' ) )
+                                .map(
+                                    ( f ) => findRoutes( f, path + '/' + f.name, routeMiddleware )
+                                )
+                      )
+                      .then(
+                          routes => ( { [ routeData.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeData.route ) } )
+                      )
+    } else if( !serverConfig.current.staticMode && currentFile.name.endsWith( '.rt.js' ) ) {
+        let routeData = getNewRouteData( currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), routes )
+        routes[ routeData.name ] = buildRoute( routeData.route, path, inheritedMiddleware )
+    } else {
+        await setStaticRoutes( routes, currentFile, path )
+    }
     return routes
+}
+
+const setStaticRoutes = async( routes, f, path ) => {
+    let route = {
+        handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
+        static: true
+    }
+    if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
+        routes[ f.name.split( '.html' )[ 0 ] ] = route
+        routes[ f.name ] = route
+    } else if( f.name.startsWith( 'index.' ) ) {
+        routes[ f.name ] = route
+        routes[ 'index' ] = route
+    } else {
+        routes[ f.name ] = route
+    }
 }
 
 /**
  * load and gather data about the specified route handler file
  * @param route The initialized route data
  * @param path The full path to the file
+ * @param inheritedMiddleware The inherited middleware
  * @returns {*}
  */
-const buildRoute = (route, path) => {
+const buildRoute = ( route, path, inheritedMiddleware ) => {
     let handlers = require( path )
 
     route.handler = {}
@@ -104,13 +183,14 @@ const buildRoute = (route, path) => {
         }
         route.handler[ method ] = handler
     }
+    route.middleware = mergeMiddleware( route.middleware || [], inheritedMiddleware )
     return route
 }
 
 /**
  * Load the routes
  */
-const init = ( ) => {
+const init = () => {
     if( !state.initializing ) {
         state.initializing = true
         //debounce fs events
@@ -118,10 +198,11 @@ const init = ( ) => {
             log.info( 'Loading routes' )
             const fullRouteDir = path.resolve( serverConfig.current.routeDir )
             if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
+            let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {})
             Promise.all(
                 fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
                   .map(
-                      ( f ) => findRoutes( f, fullRouteDir + '/' + f.name )
+                      ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
                   )
             ).then(
                 routes => {
@@ -130,7 +211,7 @@ const init = ( ) => {
                 }
             )
 
-        }, 0)
+        }, 0 )
     }
 
 }

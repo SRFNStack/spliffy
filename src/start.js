@@ -1,3 +1,5 @@
+import { validateMiddleware } from './routes.js'
+
 const http = require( 'http' )
 const serverConfig = require( './serverConfig' )
 const dispatcher = require( './dispatcher' )
@@ -38,15 +40,8 @@ module.exports = function( config ) {
     serverConfig.current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
     serverConfig.current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 
-    if( serverConfig.current.filters ) {
-        if( !Array.isArray( serverConfig.current.filters ) )
-            throw 'Filters must be an array of functions'
-
-        serverConfig.current.filters.forEach( f => {
-            if( typeof f !== 'function' ) {
-                throw 'Each element in the array of filters must be a function'
-            }
-        } )
+    if( serverConfig.current.middleware ) {
+        validateMiddleware(serverConfig.current.middleware)
     }
 
     if( !serverConfig.current.hasOwnProperty( 'logAccess' ) ) {

@@ -82,7 +82,7 @@ export default div(
         li( '/www/strains/gorillaGlue/info/something/more/stuff' ),
         li( '/www/strains/blueDream/dankness/allOfIt' )
     ),
-    //TODO update docs from filters to middleware
+    //TODO update docs for middleware
     //create a .mw.js file in any folder, export a middleware property, and it applies to the folder it's in and everything below it.
     // export a middleware property from any .rt.js file to only apply it to that file.
     // set middleware in the app config to apply to the entire app.

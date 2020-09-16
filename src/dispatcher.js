@@ -6,7 +6,7 @@ const routes = require( './routes' )
 const content = require( './content' )
 const cookie = require( 'cookie' )
 
-const setCookie = (res) => function(){return  res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
+const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 
 /**
  * Actually handle an incoming request
@@ -16,7 +16,7 @@ const setCookie = (res) => function(){return  res.setHeader( 'set-cookie', [ ...
  * @param body The request body
  * @param handler The handler for the route
  */
-const handle = ( url, res, req, body, handler) => {
+const handle = ( url, res, req, body, handler ) => {
     try {
         body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
@@ -28,8 +28,12 @@ const handle = ( url, res, req, body, handler) => {
     try {
         let handled = handler[ req.method ](
             {
-                setCookie: setCookie(res),
-                url, body, headers: req.headers, req, res
+                setCookie: setCookie( res ),
+                url,
+                body,
+                headers: req.headers,
+                req,
+                res
             } )
         if( !handled ) {
             end( res, 500, 'OOPS' )
@@ -52,10 +56,10 @@ const handle = ( url, res, req, body, handler) => {
 }
 
 const handleError = ( res, e ) => {
-    if( typeof e.body !== 'string' ) {
+    if( e.body && typeof e.body !== 'string' ) {
         e.body = JSON.stringify( e.body )
     }
-    end( res, e.statusCode || 500, e.statusMessage || 'Internal Server Error', e.body || '' )
+    end( res, e.statusCode || e.status || 500, e.statusMessage || e.message || 'Internal Server Error', e.body || '' )
 }
 
 const end = ( res, code, message, body ) => {
@@ -72,7 +76,7 @@ const logAccess = function( req, res ) {
 }
 
 const finalizeResponse = ( req, res, handled ) => {
-    if( res.writable && !res.finished ) {
+    if( res.writable ) {
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, 200, 'OK' )
@@ -102,12 +106,33 @@ const finalizeResponse = ( req, res, handled ) => {
     }
 }
 
-const handleRequest = async ( req, res ) => {
+async function executeMiddleware( middlewarez, req, res ) {
+    await new Promise( ( resolve ) => {
+        let current = -1
+        const next = ( err ) => {
+            if( err ) {
+                handleError( res, err )
+                resolve()
+            }
+            current++
+            if( current === middlewarez.length ) {
+                resolve()
+            } else {
+                setTimeout( () => middlewarez[ current ]( req, res, next ), 0 )
+            }
+        }
+
+        next()
+    } )
+
+}
+
+const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
     req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
     let route = routes.find( url )
-    if(!route.handler && serverConfig.current.notFoundRoute) {
-        route = routes.find(parseUrl(serverConfig.current.notFoundRoute))
+    if( !route.handler && serverConfig.current.notFoundRoute ) {
+        route = routes.find( parseUrl( serverConfig.current.notFoundRoute ) )
     }
     if( !route.handler ) {
         end( res, 404, 'Not Found' )
@@ -115,13 +140,15 @@ const handleRequest = async ( req, res ) => {
         try {
             let reqBody = ''
             req.on( 'data', data => reqBody += String( data ) )
-            req.on( 'end', async () => {
+            req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
-                if( req.method === 'OPTIONS' ) {
-                    res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
-                    end( res, 204 )
-                } else {
-                    if( !res.finished ) {
+                await executeMiddleware( route.middleware, res, req )
+                if( res.writable ) {
+                    if( req.method === 'OPTIONS' ) {
+                        res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
+                        end( res, 204 )
+                    } else {
+
                         handle( url, res, req, reqBody, route.handler )
                     }
                 }
