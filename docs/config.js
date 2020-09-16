@@ -10,11 +10,6 @@ export default div(
     logAccess: true,
     routePrefix: "api",
     notFoundRoute: "/404",
-    filters: [
-        ( {url, req, reqBody, res, handler, routeInfo, handlerInfo} ) => {
-            res.finished = true
-        }
-    ]
     acceptsDefault: "*/*",
     defaultContentType: "*/*",
     contentHandlers: {
@@ -66,18 +61,6 @@ export default div(
             ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo' ),
         li( strong( 'notFoundRoute' ),
             ': The route to use for the not found page. This can also be used as a catchall for single page apps.' ),
-        li( strong( 'filters' ),
-            ': Functions to filter requests. All filters must return true for the request to be accepted. ',
-            ul(
-                li( strong( 'url' ), ': The url being filtered' ),
-                li( strong( 'req' ), ': The un-adulterated node IncomingMessage request object' ),
-                li( strong( 'reqBody' ), ': The original unmodified request body' ),
-                li( strong( 'res' ), ': The un-adulterated node ServerResponse response object' ),
-                li( strong( 'handler' ), ': The request handler that will handle this request' ),
-                li( strong( 'routeInfo' ), ': Meta information about the route' ),
-                li( strong( 'handlerInfo' ), ': Meta information about the handler' )
-            )
-        ),
         li( strong( 'acceptsDefault' ),
             ': The default mime type to use when accepting a request body. e({m},/) will convert objects from json by default' ),
         li( strong( 'defaultContentType' ),

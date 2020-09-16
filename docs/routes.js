@@ -3,10 +3,8 @@ import fourOhFore from './404.js'
 import routing from './routing.js'
 
 import { fnbind, fnlink, pathState, route } from './fntags.js'
-import { secondaryColor } from './constants.js'
 import secure from './secure.js'
 import staticFiles from './staticFiles.js'
-import security from './security.js'
 import config from './config.js'
 
 
@@ -15,7 +13,6 @@ const routes = [
     { url: '/routing', linkText: 'Routing', component: routing },
     { url: '/static', linkText: 'Static Files', component: staticFiles },
     { url: '/https', linkText: 'HTTPS', component: secure },
-    { url: '/security', linkText: 'Security', component: security },
     { url: '/config', linkText: 'Config', component: config },
     // {url: "/reference", linkText: 'Reference', component: reference},
     { url: '.*', component: fourOhFore }

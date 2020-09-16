@@ -82,44 +82,11 @@ export default div(
         li( '/www/strains/gorillaGlue/info/something/more/stuff' ),
         li( '/www/strains/blueDream/dankness/allOfIt' )
     ),
-    h3( { id: 'filters' }, 'Filters' ),
-    p( 'Requests can be filtered using functions. If the return is falsey, the request will not proceed and a 405 status code will be returned. ' ),
-    p( 'If an object is returned, it\'s properties will be included on the object passed to any remaining filters and the request handler.' ),
-    p( 'This can be used for injecting any kind of data into your handlers.' ),
-    p( 'To stop execution of filters, and end the request,' ),
-
-    h3( { id: 'prevent-handler-execution-with-filters' }, 'Prevent handler execution with Filters' ),
-    p( 'To prevent the handler from executing the request, set res.finished = true. This will stop the request from processing through any more filters and will end the request.' ),
-
-    h3( { id: 'route-and-handler-metadata' }, 'Route and Handler Metadata' ),
-    p( 'You may pass additional information to filters or request handlers on each request at the route level and at each method level.' ),
-    p( 'To pass route data you must set the ',
-       strong( 'handlers' ),
-       ' property on your default export, then all other properties are passed to filters and handlers as the ',
-       strong( 'routeInfo' ),
-       ' property.' ),
-    p( 'To pass method specific data set the method to an object with a ',
-       strong( 'handler' ),
-       ' property, then all other properties will be passed as the ',
-       strong( 'methodInfo' ),
-       ' property.' ),
-    p( 'This is useful for cases where a filter or handler needs to know something about the route or handler.' ),
-    pre( prismCode( `module.exports = {
-    words: "Actin' funny, but I don't know why",
-    handlers: {
-        GET: {
-            words: async ()=>"'Scuse me while I kiss the sky",
-            handler: async ({url, body, headers, req, res, routeMeta, handlerMeta}) => ({
-                body: {
-                    song: {
-                        title: 'Purple Haze',
-                        artist: 'Jimi Hendrix',
-                        words: routeMeta.words + (await handlerMeta.words())
-                    }
-                }
-            })
-        }
-    }
-}`
-    ) )
+    //TODO update docs from filters to middleware
+    //create a .mw.js file in any folder, export a middleware property, and it applies to the folder it's in and everything below it.
+    // export a middleware property from any .rt.js file to only apply it to that file.
+    // set middleware in the app config to apply to the entire app.
+    //
+    // export a middleware: array property to apply middleware to all methods
+    // export a middleware: object property to only apply middleware to specified methods
 )

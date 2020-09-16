@@ -9,7 +9,13 @@ const state = {
     hasPendingFsEvent: false
 }
 
-const getRouteInfo = ( name, routes ) => {
+/**
+ * Build a route data with an initialized route object
+ * @param name The name of the route
+ * @param routes The current routes, used for validation
+ * @returns {{route: {}, name: *}|{route: {key: string}, name: string}|{route: {catchall: boolean}, name: string}}
+ */
+const getNewRouteData = ( name, routes ) => {
     if( name.startsWith( '$' ) ) {
         if( 'variable' in routes ) {
             throw `You can not have two path variables in the same dir. Conflicting handlers: ${name} and \$${routes.variable.key}.`
@@ -31,47 +37,35 @@ const getRouteInfo = ( name, routes ) => {
         return { name, route: {} }
 }
 
+/**
+ * Recursively walk the specified directory to discover all of the routes and middleware
+ * @param f The file or directory to search for routes
+ * @param path The full path to the current file
+ * @returns {Promise<{} | Promise<(Promise<(Promise<T | never>|{})[] | never>|{})[] | never>>}
+ */
 const findRoutes = async( f, path ) => {
     let routes = {}
     if( f.isDirectory() ) {
 
-        let routeInfo = getRouteInfo( f.name, routes )
+        let routeData = getNewRouteData( f.name, routes )
 
         return Promise.all(
             fs.readdirSync( path, { withFileTypes: true } )
               .map(
                   ( f ) => findRoutes( f, path + '/' + f.name )
               ) ).then(
-            routes => ( { [ routeInfo.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeInfo.route ) } )
+            routes => ( { [ routeData.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeData.route ) } )
         )
     } else if( !serverConfig.current.staticMode && f.name.endsWith( '.rt.js' )) {
-        let routeData = getRouteInfo( f.name.substr( 0, f.name.length - 6 ), routes )
-        let handlerFile = require( path )
-        let handlers = handlerFile.handlers || handlerFile
-        let handlerInfo = handlerFile.handlers &&
-                          Object.keys( handlerFile )
-                                .filter( k => k !== 'handlers' )
-                                .reduce( ( r, k ) => r[ k ] = handlerFile[ k ] )
-                          || {}
-        routeData.route.handler = {}
-        routeData.route.routeInfo = handlerInfo
-        for( let method in handlers ) {
-            let handler = handlers[ method ].handler || handlers[ method ]
-            let handlerInfo = handlerFile.handler &&
-                              Object.keys( handlerFile )
-                                    .filter( k => k !== 'handler' )
-                                    .reduce( ( r, k ) => r[ k ] = handlerFile[ k ] )
-                              || {}
-            if( !method.match( '^[A-Z]+$' ) ) {
-                throw `Method: ${method} in file ${path} is invalid. Method names must be all uppercase. You should not export properties other than the request methods you want to expose!`
-            }
-            if( typeof handler !== 'function' ) {
-                throw `Request method ${method} must be a function. Got: ${handlers[ method ]}`
-            }
-            routeData.route.handler[ method ] = handler
-            routeData.route.handlerInfo = handlerInfo
+        let routeData = getNewRouteData( f.name.substr( 0, f.name.length - '.rt.js'.length ), routes )
+        routes[ routeData.name ] = {...(routes[routeData.name] || {}), ...buildRoute(routeData.route, path)}
+    } else if( !serverConfig.current.staticMode && f.name.endsWith( '.mw.js' )){
+        let routeData = getNewRouteData( f.name.substr( 0, f.name.length - '.mw.js'.length ), routes )
+        let middleware = require(path)
+        if(!middleware.middleware){
+            throw new Error(".mw.js files must export a middleware property")
         }
-        routes[ routeData.name ] = routeData.route
+        routes[routeData.name] = {...(routes[routeData.name] || {}), middleware: middleware.middleware }
     } else {
         let route = {
             handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
@@ -90,7 +84,33 @@ const findRoutes = async( f, path ) => {
     return routes
 }
 
-const init = ( now ) => {
+/**
+ * load and gather data about the specified route handler file
+ * @param route The initialized route data
+ * @param path The full path to the file
+ * @returns {*}
+ */
+const buildRoute = (route, path) => {
+    let handlers = require( path )
+
+    route.handler = {}
+    for( let method in handlers ) {
+        let handler = handlers[ method ]
+        if( !method.match( '^[A-Z]+$' ) ) {
+            throw `Method: ${method} in file ${path} is invalid. Method names must be all uppercase. You should not export properties other than the request methods you want to expose!`
+        }
+        if( typeof handler !== 'function' ) {
+            throw `Request method ${method} must be a function. Got: ${handlers[ method ]}`
+        }
+        route.handler[ method ] = handler
+    }
+    return route
+}
+
+/**
+ * Load the routes
+ */
+const init = ( ) => {
     if( !state.initializing ) {
         state.initializing = true
         //debounce fs events
@@ -110,13 +130,18 @@ const init = ( now ) => {
                 }
             )
 
-        }, now ? 0 : 100 )
+        }, 0)
     }
 
 }
 
 module.exports = {
     init,
+    /**
+     * Find a handler for the given url
+     * @param url
+     * @returns {{}|{handler: ({}|{GET}|*|{GET}), pathParameters}}
+     */
     find: ( url ) => {
         let prefix = serverConfig.current.routePrefix
         if( prefix && !url.path.startsWith( '/' + prefix ) ) {

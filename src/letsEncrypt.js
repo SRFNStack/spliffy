@@ -70,7 +70,7 @@ const orderNew = async( accountKey, keyData, leConfig ) => {
     const [ _, csr ] = await acme.forge.createCsr( config, keyData )
     await client.finalizeOrder( order, csr )
     let cert = await client.getCertificate( order )
-    log.info( 'Let\'s encrypt certificate created!' )
+    log.gne( 'Let\'s encrypt certificate created!' )
     return Buffer.from( cert, 'utf8' )
 }
 
@@ -120,7 +120,7 @@ const renewIfNeeded = async( keyFile, certFile, accountKeyFile ) => {
             log.error( 'Failed to order new certificate', e )
         }
     } else {
-        log.info( 'Certificate valid.' )
+        log.gne( 'Certificate valid.' )
     }
     secure.updateIfChanged( keyData, certData )
 }
@@ -135,7 +135,7 @@ const withLock = async( fn, maxWaitms = 900000 ) => {
     while( new Date().getTime() - started < maxWaitms ) {
         try {
             fs.writeFileSync( serverConfig.current.secure.letsEncrypt.certPath + '/.lock', process.pid, { flag: 'wx' } )
-            log.info( 'Got lock on', serverConfig.current.secure.letsEncrypt.certPath )
+            log.gne( 'Got lock on', serverConfig.current.secure.letsEncrypt.certPath )
             const result = await fn()
             fs.unlinkSync( serverConfig.current.secure.letsEncrypt.certPath + '/.lock' )
             log.info( 'Released lock on', serverConfig.current.secure.letsEncrypt.certPath )

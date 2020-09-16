@@ -8,7 +8,15 @@ const cookie = require( 'cookie' )
 
 const setCookie = (res) => function(){return  res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 
-const handle = ( url, res, req, body, handler, routeInfo, handlerInfo, filterInjected ) => {
+/**
+ * Actually handle an incoming request
+ * @param url The url being requested
+ * @param res The node response object
+ * @param req The node request object
+ * @param body The request body
+ * @param handler The handler for the route
+ */
+const handle = ( url, res, req, body, handler) => {
     try {
         body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
@@ -20,9 +28,8 @@ const handle = ( url, res, req, body, handler, routeInfo, handlerInfo, filterInj
     try {
         let handled = handler[ req.method ](
             {
-                ...filterInjected,
                 setCookie: setCookie(res),
-                url, body, headers: req.headers, req, res, routeInfo, handlerInfo
+                url, body, headers: req.headers, req, res
             } )
         if( !handled ) {
             end( res, 500, 'OOPS' )
@@ -110,36 +117,12 @@ const handleRequest = async ( req, res ) => {
             req.on( 'data', data => reqBody += String( data ) )
             req.on( 'end', async () => {
                 url.pathParameters = route.pathParameters
-                let filterInjected = {}
-                if( serverConfig.current.filters ) {
-                    for( let filter of serverConfig.current.filters ) {
-                        const result = await filter( {
-                                                   ...filterInjected,
-                                                   url,
-                                                   req,
-                                                   reqBody,
-                                                   res,
-                                                   handler: route.handler,
-                                                   routeInfo: route.routeInfo,
-                                                   handlerInfo: route.handler.handlerInfo,
-                                                   setCookie: setCookie(res)
-                                               } )
-                        if( result ) {
-                            if(typeof result !== 'object' || Array.isArray( result )){
-                                filterInjected = { ...filterInjected, ...result }
-                            }
-                        } else {
-                            end(res, 405 )
-                        }
-                        if( res.finished ) break
-                    }
-                }
                 if( req.method === 'OPTIONS' ) {
                     res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
                     end( res, 204 )
                 } else {
                     if( !res.finished ) {
-                        handle( url, res, req, reqBody, route.handler, route.routeInfo, route.handler.handlerInfo, filterInjected )
+                        handle( url, res, req, reqBody, route.handler )
                     }
                 }
             } )

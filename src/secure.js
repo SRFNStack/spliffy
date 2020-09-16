@@ -73,7 +73,7 @@ module.exports = {
             } else {
                 state.server.listen( serverConfig.current.secure.port )
             }
-            log.info( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.secure.port} and ${serverConfig.current.port}` )
+            log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.secure.port} and ${serverConfig.current.port}` )
         }
 
     }

@@ -17,6 +17,9 @@ module.exports = {
     info( e ) {
         ifLevelEnabled(console.info, 'INFO',[...arguments])
     },
+    gne(e) {
+      ifLevelEnabled(console.info,  'GOOD NEWS EVERYONE!', [...arguments])
+    },
     access( e ) {
         if(serverConfig.current.logAccess) {
             ifLevelEnabled(console.info, 'ACCESS',[...arguments])

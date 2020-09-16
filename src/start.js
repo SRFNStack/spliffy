@@ -13,6 +13,19 @@ const defaultHeaders = {
     defaultContentType: '*/*'
 }
 
+const nonsense = [
+    'Is it getting hot in here?',
+    'Ouch...',
+    'Hold my beer',
+    'Gettin\' Sendy',
+    'Look a squirrel!',
+    'I swear I only had 3',
+    'I see a light...',
+    'Totally zooted'
+]
+
+const randomNonsense = () => nonsense[ Math.floor( Math.random() * nonsense.length ) ]
+
 module.exports = function( config ) {
     if( !config || !config.routeDir ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
@@ -40,8 +53,7 @@ module.exports = function( config ) {
         serverConfig.current.logAccess = true
     }
     serverConfig.current.port = config.port || 10420
-    routes.init( true )
-
+    routes.init()
 
     let httpServer
 
@@ -62,10 +74,10 @@ module.exports = function( config ) {
         } else {
             httpServer = http.createServer( dispatcher )
                              .listen( serverConfig.current.port )
-            log.info( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
+            log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
         }
     } catch(e) {
-        log.error( 'Is it getting hot in here?', e )
+        log.error( randomNonsense(), e )
         const secureServers = secure.getServers()
         if( secureServers.redirectServer ) secureServers.redirectServer.close( () => {} )
         if( secureServers.server ) secureServers.server.close( () => {log.error( 'server stopped' )} )
