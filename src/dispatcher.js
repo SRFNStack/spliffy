@@ -4,6 +4,7 @@ const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
 const cookie = require( 'cookie' )
+const spliffy = require( './index.js' )
 const { HTTP_METHODS } = require( './routes.js' )
 const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 
@@ -141,7 +142,7 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
                         }
                     } catch(e) {
 
-                        log.error("Middleware threw exception", e)
+                        log.error( 'Middleware threw exception', e )
                         next( e )
                     }
                 }, 0 )
@@ -155,6 +156,13 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
 
 const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
+    res.redirect = ( code, location ) => {
+        if( typeof code === 'string' ) {
+            code = 301
+            location = code
+        }
+        finalizeResponse( req, res, spliffy.redirect( location, code === 301 ) )
+    }
     req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
     let route = routes.find( url )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
