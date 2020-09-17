@@ -53,11 +53,11 @@ const mergeMiddleware = ( incoming, existing ) => {
 
     validateMiddleware( incoming )
     if( Array.isArray( incoming ) ) {
-        mergeInto.ALL = incoming.concat( existing.ALL || [] )
+        mergeInto.ALL = ( existing.ALL || [] ).concat( incoming )
     } else if( typeof incoming === 'object' ) {
         for( let method in incoming ) {
             let upMethod = method.toUpperCase()
-            mergeInto[ upMethod ] = ( incoming[ method ] || [] ).concat( mergeInto[ upMethod ] || [] )
+            mergeInto[ upMethod ] = ( mergeInto[ method ] || [] ).concat( incoming[ upMethod ] || [] )
         }
     }
     return mergeInto
@@ -142,15 +142,16 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
         let routeData = getNewRouteData( currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), routes )
         routes[ routeData.name ] = buildRoute( routeData.route, path, inheritedMiddleware )
     } else {
-        await setStaticRoutes( routes, currentFile, path )
+        await setStaticRoutes( routes, currentFile, path, inheritedMiddleware )
     }
     return routes
 }
 
-const setStaticRoutes = async( routes, f, path ) => {
+const setStaticRoutes = async( routes, f, path, inheritedMiddleware ) => {
     let route = {
         handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
-        static: true
+        static: true,
+        middleware: inheritedMiddleware
     }
     if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
         routes[ f.name.split( '.html' )[ 0 ] ] = route

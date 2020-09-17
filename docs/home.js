@@ -73,16 +73,5 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
     statusCode: 420,
     statusMessage: "Enhance Your Calm"
 }`
-                    ),
-                    h3( { id: 'feature-backlog-ordered-by-priority-' }, 'Feature backlog' ),
-                    ul(
-                        li( 'authentication/authorization filter with default and per handler configuration' ),
-                        li( 'compression' ),
-                        li( 'HTTP/2 with server push' ),
-                        li( 'caching filter' ),
-                        li( 'multipart file handling' ),
-                        li( 'Server side rendering (aka templating/mvc' ),
-                        li( 'proxy address trust and x-forwarded-for using proxy-addr' ),
-                        li( 'Production mode that creates a manifest containing all of the known routes, any files not in the manifest won\'t be loaded. This will prevent routes being added at runtime.' )
                     )
 )

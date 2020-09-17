@@ -34,9 +34,7 @@ const handle = ( url, res, req, body, handler ) => {
                 req,
                 res
             } )
-        if( !handled ) {
-            end( res, 500, 'OOPS' )
-        } else if( handled.then && typeof handled.then == 'function' ) {
+        if( handled && handled.then && typeof handled.then == 'function' ) {
             handled.then( ( h ) => finalizeResponse( req, res, h ) )
                    .catch(
                        e => {
@@ -107,7 +105,7 @@ const finalizeResponse = ( req, res, handled ) => {
 
 async function executeMiddleware( middlewarez, req, res ) {
 
-    const applicableMiddleware = ( middlewarez[ req.method ] || [] ).concat( middlewarez.ALL || [] )
+    const applicableMiddleware = ( middlewarez.ALL || [] ).concat( middlewarez[ req.method ] || [] )
 
     await new Promise( ( resolve ) => {
         let current = -1
@@ -155,7 +153,9 @@ const handleRequest = async( req, res ) => {
             req.on( 'data', data => reqBody += String( data ) )
             req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
-                await executeMiddleware( route.middleware, req, res )
+                req.spliffyUrl = url
+                if(route.middleware)
+                    await executeMiddleware( route.middleware, req, res )
                 if( !res.writableEnded ) {
                     if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
                         res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
