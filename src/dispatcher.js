@@ -15,7 +15,7 @@ const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ .
  * @param body The request body
  * @param handler The handler for the route
  */
-const handle = ( url, res, req, body, handler ) => {
+const handle =async ( url, res, req, body, handler, middleware ) => {
     try {
         body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
@@ -48,6 +48,8 @@ const handle = ( url, res, req, body, handler ) => {
 
     } catch(e) {
         log.error( 'handler failed', e )
+        if(middleware)
+            await executeMiddleware(middleware, req, res, e)
         handleError( res, e )
     }
 }
@@ -103,18 +105,18 @@ const finalizeResponse = ( req, res, handled ) => {
     }
 }
 
-async function executeMiddleware( middlewarez, req, res ) {
+async function executeMiddleware( middlewarez, req, res, reqErr ) {
 
     const applicableMiddleware = ( middlewarez.ALL || [] ).concat( middlewarez[ req.method ] || [] )
 
     await new Promise( ( resolve ) => {
         let current = -1
-        const next = ( err ) => {
-            if( err ) {
-                handleError( res, err )
+        const next = ( mwErr ) => {
+            if( mwErr ) {
+                handleError( res, mwErr )
                 resolve()
                 return
-            } else if(res.writableEnded){
+            } else if( res.writableEnded ) {
                 resolve()
                 return
             }
@@ -124,8 +126,16 @@ async function executeMiddleware( middlewarez, req, res ) {
             } else {
                 setTimeout( () => {
                     try {
-                        applicableMiddleware[ current ]( req, res, next )
-                    } catch(e) {
+                        let mw = applicableMiddleware[ current ]
+                        if( reqErr && mw.length === 4 ) {
+                            mw( reqErr, req, res, next )
+                        } else if(mw.length === 3 && !reqErr) {
+                            mw( req, res, next )
+                        } else {
+                            next()
+                        }
+                    }
+                     catch(e) {
                         handleError( res, e )
                         resolve()
                     }
@@ -154,21 +164,23 @@ const handleRequest = async( req, res ) => {
             req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
                 req.spliffyUrl = url
-                if(route.middleware)
+                if( route.middleware )
                     await executeMiddleware( route.middleware, req, res )
                 if( !res.writableEnded ) {
                     if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
                         res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
                         end( res, 204 )
                     } else {
-
-                        handle( url, res, req, reqBody, route.handler )
+                        await handle( url, res, req, reqBody, route.handler, route.middleware )
                     }
                 }
             } )
         } catch(e) {
             log.error( 'Handling request failed', e )
-            handleError( res, e )
+            if( route.middleware )
+                await executeMiddleware( route.middleware, req, res, e )
+            if(!res.writableEnded)
+                handleError( res, e )
         }
     } else {
         end( res, 405, 'Method Not Allowed' )
