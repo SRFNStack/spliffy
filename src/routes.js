@@ -8,6 +8,7 @@ const state = {
     initializing: false,
     hasPendingFsEvent: false
 }
+const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE' ]
 
 /**
  * Build a route data with an initialized route object
@@ -48,7 +49,7 @@ const getNewRouteData = ( name, routes ) => {
  * }
  */
 const mergeMiddleware = ( incoming, existing ) => {
-    const mergeInto = cloneMiddleware(existing)
+    const mergeInto = cloneMiddleware( existing )
 
     validateMiddleware( incoming )
     if( Array.isArray( incoming ) ) {
@@ -56,16 +57,16 @@ const mergeMiddleware = ( incoming, existing ) => {
     } else if( typeof incoming === 'object' ) {
         for( let method in incoming ) {
             let upMethod = method.toUpperCase()
-            mergeInto[ upMethod ] = ( incoming[ upMethod ] || [] ).concat( mergeInto[ upMethod ] || [] )
+            mergeInto[ upMethod ] = ( incoming[ method ] || [] ).concat( mergeInto[ upMethod ] || [] )
         }
     }
     return mergeInto
 }
 
-const cloneMiddleware = (middleware)=>{
+const cloneMiddleware = ( middleware ) => {
     const clone = { ...middleware }
     for( let method in middleware ) {
-        middleware[ method ] = [ ...middleware[ method ] ]
+        clone[ method ] = [ ...( middleware[ method ] || [] ) ]
     }
     return clone
 }
@@ -74,7 +75,7 @@ const cloneMiddleware = (middleware)=>{
  * Ensure the given middleware is valid
  * @param middleware
  */
-export const validateMiddleware = ( middleware ) => {
+const validateMiddleware = ( middleware ) => {
     if( Array.isArray( middleware ) )
         validateMiddlewareArray( middleware )
 
@@ -126,7 +127,7 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
                 validateMiddleware( exports.middleware )
                 return exports.middleware
             } )
-            .reduce((incoming, result)=>mergeMiddleware(incoming, result), inheritedMiddleware)
+            .reduce( ( result, incoming ) => mergeMiddleware( incoming, result ), inheritedMiddleware )
 
         return Promise.all( files
                                 .filter( f => !f.name.endsWith( '.mw.js' ) )
@@ -173,17 +174,20 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
     let handlers = require( path )
 
     route.handler = {}
+    route.middleware = mergeMiddleware( handlers.middleware || [], inheritedMiddleware )
+    //remove the middleware property if it was set so validation can still pass and to ensure we don't make bogus handlers
+    delete handlers.middleware
     for( let method in handlers ) {
-        let handler = handlers[ method ]
-        if( !method.match( '^[A-Z]+$' ) ) {
-            throw `Method: ${method} in file ${path} is invalid. Method names must be all uppercase. You should not export properties other than the request methods you want to expose!`
+        if( HTTP_METHODS.indexOf( method ) === -1 ) {
+            throw `Method: ${method} in file ${path} is not a valid http method. It must be one of: ${HTTP_METHODS}. Method names must be all uppercase.`
         }
+        let handler = handlers[ method ]
         if( typeof handler !== 'function' ) {
             throw `Request method ${method} must be a function. Got: ${handlers[ method ]}`
         }
         route.handler[ method ] = handler
     }
-    route.middleware = mergeMiddleware( route.middleware || [], inheritedMiddleware )
+
     return route
 }
 
@@ -198,7 +202,7 @@ const init = () => {
             log.info( 'Loading routes' )
             const fullRouteDir = path.resolve( serverConfig.current.routeDir )
             if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
-            let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {})
+            let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
             Promise.all(
                 fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
                   .map(
@@ -218,6 +222,8 @@ const init = () => {
 
 module.exports = {
     init,
+    HTTP_METHODS,
+    validateMiddleware,
     /**
      * Find a handler for the given url
      * @param url
@@ -257,7 +263,8 @@ module.exports = {
         } while( path.length > 0 )
         return {
             handler: route && ( route.handler || ( route.index && route.index.handler ) ),
-            pathParameters: pathParameters
+            pathParameters: pathParameters,
+            middleware: route && ( route.middleware || ( route.index && route.index.middleware ) )
         }
     }
 }

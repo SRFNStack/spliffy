@@ -1,5 +1,4 @@
-import { validateMiddleware } from './routes.js'
-
+const { validateMiddleware } = require('./routes.js')
 const http = require( 'http' )
 const serverConfig = require( './serverConfig' )
 const dispatcher = require( './dispatcher' )

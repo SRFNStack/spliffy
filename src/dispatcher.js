@@ -1,11 +1,10 @@
 const parseUrl = require( './parseUrl' )
 const log = require( './log' )
-const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD' ]
 const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
 const cookie = require( 'cookie' )
-
+const { HTTP_METHODS } = require( './routes.js' )
 const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 
 /**
@@ -70,13 +69,13 @@ const end = ( res, code, message, body ) => {
 
 const logAccess = function( req, res ) {
     const start = new Date().getTime()
-    res.on( 'finish', () => {
+    res.on( 'close', () => {
         log.access( req.connection.remoteAddress, res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms' )
     } )
 }
 
 const finalizeResponse = ( req, res, handled ) => {
-    if( res.writable ) {
+    if( !res.writableEnded ) {
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, 200, 'OK' )
@@ -107,18 +106,32 @@ const finalizeResponse = ( req, res, handled ) => {
 }
 
 async function executeMiddleware( middlewarez, req, res ) {
+
+    const applicableMiddleware = ( middlewarez[ req.method ] || [] ).concat( middlewarez.ALL || [] )
+
     await new Promise( ( resolve ) => {
         let current = -1
         const next = ( err ) => {
             if( err ) {
                 handleError( res, err )
                 resolve()
+                return
+            } else if(res.writableEnded){
+                resolve()
+                return
             }
             current++
-            if( current === middlewarez.length ) {
+            if( current === applicableMiddleware.length ) {
                 resolve()
             } else {
-                setTimeout( () => middlewarez[ current ]( req, res, next ), 0 )
+                setTimeout( () => {
+                    try {
+                        applicableMiddleware[ current ]( req, res, next )
+                    } catch(e) {
+                        handleError( res, e )
+                        resolve()
+                    }
+                }, 0 )
             }
         }
 
@@ -142,9 +155,9 @@ const handleRequest = async( req, res ) => {
             req.on( 'data', data => reqBody += String( data ) )
             req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
-                await executeMiddleware( route.middleware, res, req )
-                if( res.writable ) {
-                    if( req.method === 'OPTIONS' ) {
+                await executeMiddleware( route.middleware, req, res )
+                if( !res.writableEnded ) {
+                    if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
                         res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
                         end( res, 204 )
                     } else {
@@ -168,6 +181,6 @@ module.exports =
             logAccess( req, res )
             return handleRequest( req, res )
         } catch(e) {
-            log.error( 'Failed to request' )
+            log.error( 'Failed handling request' )
         }
     }
