@@ -15,7 +15,7 @@ const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ .
  * @param body The request body
  * @param handler The handler for the route
  */
-const handle =async ( url, res, req, body, handler, middleware ) => {
+const handle = async( url, res, req, body, handler, middleware ) => {
     try {
         body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
@@ -48,8 +48,8 @@ const handle =async ( url, res, req, body, handler, middleware ) => {
 
     } catch(e) {
         log.error( 'handler failed', e )
-        if(middleware)
-            await executeMiddleware(middleware, req, res, e)
+        if( middleware )
+            await executeMiddleware( middleware, req, res, e )
         handleError( res, e )
     }
 }
@@ -108,42 +108,47 @@ const finalizeResponse = ( req, res, handled ) => {
 async function executeMiddleware( middlewarez, req, res, reqErr ) {
 
     const applicableMiddleware = ( middlewarez.ALL || [] ).concat( middlewarez[ req.method ] || [] )
+    const errorMiddleware = applicableMiddleware.filter( mw => mw.length === 4 )
+    const normalMiddleware = applicableMiddleware.filter( mw => mw.length === 3 )
 
     await new Promise( ( resolve ) => {
         let current = -1
+        let isError = false
         const next = ( mwErr ) => {
-            if( mwErr ) {
-                handleError( res, mwErr )
-                resolve()
-                return
-            } else if( res.writableEnded ) {
+            if( !isError && mwErr ) {
+                isError = true
+                current = -1
+            }
+            if( res.writableEnded ) {
                 resolve()
                 return
             }
             current++
-            if( current === applicableMiddleware.length ) {
+            if( ( isError && current === errorMiddleware.length ) ||
+                ( !isError && current === normalMiddleware.length )
+            ) {
+                if( mwErr )
+                    handleError( res, mwErr )
                 resolve()
             } else {
                 setTimeout( () => {
                     try {
-                        let mw = applicableMiddleware[ current ]
-                        if( reqErr && mw.length === 4 ) {
-                            mw( reqErr, req, res, next )
-                        } else if(mw.length === 3 && !reqErr) {
-                            mw( req, res, next )
+                        let mw = isError ? errorMiddleware[ current ] : normalMiddleware[ current ]
+                        if( mwErr ) {
+                            mw( mwErr, req, res, next )
                         } else {
-                            next()
+                            mw( req, res, next )
                         }
-                    }
-                     catch(e) {
-                        handleError( res, e )
-                        resolve()
+                    } catch(e) {
+
+                        log.error("Middleware threw exception", e)
+                        next( e )
                     }
                 }, 0 )
             }
         }
 
-        next()
+        next( reqErr )
     } )
 
 }
@@ -179,7 +184,7 @@ const handleRequest = async( req, res ) => {
             log.error( 'Handling request failed', e )
             if( route.middleware )
                 await executeMiddleware( route.middleware, req, res, e )
-            if(!res.writableEnded)
+            if( !res.writableEnded )
                 handleError( res, e )
         }
     } else {
@@ -193,6 +198,6 @@ module.exports =
             logAccess( req, res )
             return handleRequest( req, res )
         } catch(e) {
-            log.error( 'Failed handling request' )
+            log.error( 'Failed handling request', e )
         }
     }

@@ -26,6 +26,6 @@ module.exports = {
         }
     },
     error( e ) {
-        ifLevelEnabled(console.error, 'ERROR',[...arguments])
+        ifLevelEnabled(console.error, 'ERROR',[...arguments].map(arg=> arg.stack ? arg.stack : arg))
     }
 }
