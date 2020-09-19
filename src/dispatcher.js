@@ -158,6 +158,7 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
 
 const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
+    req.spliffyUrl = url
     req = decorateRequest(req)
     res = decorateResponse(res, finalizeResponse)
     let route = routes.find( url )
@@ -172,7 +173,7 @@ const handleRequest = async( req, res ) => {
             req.on( 'data', data => reqBody += String( data ) )
             req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
-                req.spliffyUrl = url
+
                 if( route.middleware )
                     await executeMiddleware( route.middleware, req, res )
                 if( !res.writableEnded ) {

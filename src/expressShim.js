@@ -9,6 +9,7 @@ module.exports = {
     setCookie,
     decorateRequest(req){
         req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
+        req.query = req.spliffyUrl.query
         return req
     },
     decorateResponse(res, req, finalizeResponse){
