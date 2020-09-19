@@ -18,9 +18,8 @@ module.exports = {
             return this
         }
         res.redirect = ( code, location ) => {
-            if( typeof code === 'string' ) {
+            if(arguments.length===1){
                 code = 301
-                location = code
             }
             finalizeResponse( req, res, spliffy.redirect( location, code === 301 )() )
         }
