@@ -1,9 +1,12 @@
 const spliffy = require( './index.js' )
+const cookie = require( 'cookie' )
+const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 /**
  * Provide a minimal set of shims to make most middleware, like passport, work
  * @type {{decorateResponse(*=, *=, *): *, decorateRequest(*): *}}
  */
 module.exports = {
+    setCookie,
     decorateRequest(req){
         req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
         return req
@@ -24,6 +27,7 @@ module.exports = {
             finalizeResponse( req, res, body )
         }
         res.json = res.send
+        res.setCookie = setCookie(res)
         return res
 
     }

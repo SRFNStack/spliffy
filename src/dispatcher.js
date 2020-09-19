@@ -3,12 +3,11 @@ const log = require( './log' )
 const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
-const cookie = require( 'cookie' )
-const spliffy = require( './index.js' )
+const { setCookie } = require( './expressShim.js' )
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
-const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
+
 
 /**
  * Actually handle an incoming request
@@ -17,6 +16,7 @@ const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ .
  * @param req The node request object
  * @param body The request body
  * @param handler The handler for the route
+ * @param middleware The middleware that applies to this request
  */
 const handle = async( url, res, req, body, handler, middleware ) => {
     try {
