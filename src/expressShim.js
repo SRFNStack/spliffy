@@ -1,4 +1,3 @@
-const spliffy = require( './index.js' )
 const cookie = require( 'cookie' )
 const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
 /**
@@ -7,27 +6,32 @@ const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ .
  */
 module.exports = {
     setCookie,
-    decorateRequest(req){
+    decorateRequest( req ) {
         req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
         req.query = req.spliffyUrl.query
         return req
     },
-    decorateResponse(res, req, finalizeResponse){
-        res.status = (code)=>{
+    decorateResponse( res, req, finalizeResponse ) {
+        res.status = ( code ) => {
             this.statusCode = code
             return this
         }
         res.redirect = function( code, location ) {
-            if(arguments.length===1){
+            if( arguments.length === 1 ) {
                 code = 301
             }
-            return finalizeResponse( req, res, spliffy.redirect( location, code === 301 )() )
+            return finalizeResponse( req, res, {
+                statusCode: code,
+                headers: {
+                    'location': location
+                }
+            } )
         }
-        res.send = (body)=>{
+        res.send = ( body ) => {
             finalizeResponse( req, res, body )
         }
         res.json = res.send
-        res.setCookie = setCookie(res)
+        res.setCookie = setCookie( res )
         return res
 
     }
