@@ -18,6 +18,7 @@ module.exports = {
         }
         res.redirect = function( code, location ) {
             if( arguments.length === 1 ) {
+                location = code
                 code = 301
             }
             return finalizeResponse( req, res, {
