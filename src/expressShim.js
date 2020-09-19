@@ -22,7 +22,7 @@ module.exports = {
                 code = 301
                 location = code
             }
-            finalizeResponse( req, res, spliffy.redirect( location, code === 301 ) )
+            finalizeResponse( req, res, spliffy.redirect( location, code === 301 )() )
         }
         res.send = (body)=>{
             finalizeResponse( req, res, body )
