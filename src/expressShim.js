@@ -17,11 +17,11 @@ module.exports = {
             this.statusCode = code
             return this
         }
-        res.redirect = ( code, location ) => {
+        res.redirect = function( code, location ) {
             if(arguments.length===1){
                 code = 301
             }
-            finalizeResponse( req, res, spliffy.redirect( location, code === 301 )() )
+            return finalizeResponse( req, res, spliffy.redirect( location, code === 301 )() )
         }
         res.send = (body)=>{
             finalizeResponse( req, res, body )
