@@ -160,7 +160,7 @@ const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
     req.spliffyUrl = url
     req = decorateRequest(req)
-    res = decorateResponse(res, finalizeResponse)
+    res = decorateResponse(res, req, finalizeResponse)
     let route = routes.find( url )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
         route = routes.find( parseUrl( serverConfig.current.notFoundRoute ) )
