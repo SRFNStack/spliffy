@@ -78,14 +78,16 @@ module.exports = async function( config ) {
             if( secureServers.redirectServer ) secureServers.redirectServer.close( () => {} )
             if( secureServers.server ) secureServers.server.close( () => {log.error( 'server crashed' )} )
             if( httpServer ) httpServer.close( () => {log.error( 'server crashed' )} )
-            const waitms = Math.pow( 2, consecutiveFailures ) * 100
-            log.error( `Server crashed, restarting in ${waitms}ms` )
             const now = new Date().getTime()
             if( now - lastStart <= 10 * 60 * 1000 ) {
                 consecutiveFailures++
             } else {
                 consecutiveFailures = 0
             }
+        } finally {
+            const waitms = Math.pow( 2, consecutiveFailures ) * 100
+            log.error( `Server crashed, restarting in ${waitms}ms` )
+
             setTimeout( () => {
                 lastStart = new Date().getTime()
                 doStart()
