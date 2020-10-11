@@ -1,4 +1,4 @@
-const { validateMiddleware } = require('./routes.js')
+const { validateMiddleware } = require( './routes.js' )
 const http = require( 'http' )
 const serverConfig = require( './serverConfig' )
 const dispatcher = require( './dispatcher' )
@@ -40,7 +40,7 @@ module.exports = async function( config ) {
     serverConfig.current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 
     if( serverConfig.current.middleware ) {
-        validateMiddleware(serverConfig.current.middleware)
+        validateMiddleware( serverConfig.current.middleware )
     }
 
     if( !serverConfig.current.hasOwnProperty( 'logAccess' ) ) {
@@ -54,29 +54,24 @@ module.exports = async function( config ) {
     let consecutiveFailures = 0
     let lastStart = new Date().getTime()
 
-
-    const doStart = ()=>{
-        if( config.secure ) {
-
-            if( config.secure.letsEncrypt ) {
-                letsEncrypt.init( true )
-                           .catch( e => {
-                               setTimeout( () => {throw e} )
-                           } )
-
-            } else {
-                secure.startHttps( config.secure )
-            }
-            secure.startHttpRedirect()
-        } else {
-            httpServer = http.createServer( dispatcher )
-                             .listen( serverConfig.current.port )
-            log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
-        }
-    }
-    while(true){
+    const doStart = () => {
         try {
-            doStart()
+            if( config.secure ) {
+                if( config.secure.letsEncrypt ) {
+                    letsEncrypt.init( true )
+                               .catch( e => {
+                                   setTimeout( () => {throw e} )
+                               } )
+
+                } else {
+                    secure.startHttps( config.secure )
+                }
+                secure.startHttpRedirect()
+            } else {
+                httpServer = http.createServer( dispatcher )
+                                 .listen( serverConfig.current.port )
+                log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
+            }
         } catch(e) {
             log.error( randomNonsense(), e )
             const secureServers = secure.getServers()
@@ -86,7 +81,7 @@ module.exports = async function( config ) {
             const waitms = Math.pow( 2, consecutiveFailures ) * 100
             log.error( `Server crashed, restarting in ${waitms}ms` )
             const now = new Date().getTime()
-            if( now - lastStart <= 10*60*1000 ) {
+            if( now - lastStart <= 10 * 60 * 1000 ) {
                 consecutiveFailures++
             } else {
                 consecutiveFailures = 0
@@ -98,4 +93,5 @@ module.exports = async function( config ) {
         }
     }
 
+    doStart()
 }
