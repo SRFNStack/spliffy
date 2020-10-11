@@ -73,28 +73,31 @@ module.exports = async function( config ) {
                 log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
             }
         } catch(e) {
-            log.error( randomNonsense(), e )
-            const secureServers = secure.getServers()
-            if( secureServers.redirectServer )
-                await new Promise( res => secureServers.redirectServer.close( res ) )
-            if( secureServers.server )
-                await new Promise( res => secureServers.server.close( res ) )
-            if( httpServer )
-                await new Promise( res => httpServer.close( res ) )
-            const now = new Date().getTime()
-            if( now - lastStart <= 10 * 60 * 1000 ) {
-                consecutiveFailures++
-            } else {
-                consecutiveFailures = 0
-            }
-        } finally {
-            const waitms = Math.pow( 2, consecutiveFailures ) * 100
-            log.error( `Server crashed, restarting in ${waitms}ms` )
+            try {
 
-            setTimeout( () => {
-                lastStart = new Date().getTime()
-                doStart()
-            }, waitms )
+                log.error( randomNonsense(), e )
+                const secureServers = secure.getServers()
+                if( secureServers.redirectServer )
+                    await new Promise( res => secureServers.redirectServer.close( res ) )
+                if( secureServers.server )
+                    await new Promise( res => secureServers.server.close( res ) )
+                if( httpServer )
+                    await new Promise( res => httpServer.close( res ) )
+                const now = new Date().getTime()
+                if( now - lastStart <= 10 * 60 * 1000 ) {
+                    consecutiveFailures++
+                } else {
+                    consecutiveFailures = 0
+                }
+            } finally {
+                const waitms = Math.pow( 2, consecutiveFailures ) * 100
+                log.error( `Server crashed, restarting in ${waitms}ms` )
+
+                setTimeout( () => {
+                    lastStart = new Date().getTime()
+                    doStart()
+                }, waitms )
+            }
         }
     }
 
