@@ -54,7 +54,7 @@ module.exports = async function( config ) {
     let consecutiveFailures = 0
     let lastStart = new Date().getTime()
 
-    const doStart = () => {
+    const doStart = async() => {
         try {
             if( config.secure ) {
                 if( config.secure.letsEncrypt ) {
@@ -75,9 +75,12 @@ module.exports = async function( config ) {
         } catch(e) {
             log.error( randomNonsense(), e )
             const secureServers = secure.getServers()
-            if( secureServers.redirectServer ) secureServers.redirectServer.close( () => {} )
-            if( secureServers.server ) secureServers.server.close( () => {log.error( 'server crashed' )} )
-            if( httpServer ) httpServer.close( () => {log.error( 'server crashed' )} )
+            if( secureServers.redirectServer )
+                await new Promise( res => secureServers.redirectServer.close( res ) )
+            if( secureServers.server )
+                await new Promise( res => secureServers.server.close( res ) )
+            if( httpServer )
+                await new Promise( res => httpServer.close( res ) )
             const now = new Date().getTime()
             if( now - lastStart <= 10 * 60 * 1000 ) {
                 consecutiveFailures++
