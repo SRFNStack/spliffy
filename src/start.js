@@ -102,4 +102,10 @@ module.exports = async function( config ) {
     }
 
     doStart()
+    process.on('unhandledRejection', (reason, p) => {
+        log.error(reason, 'Unhandled Rejection at Promise', p);
+    }).on( 'uncaughtException', (err, origin) => {
+        log.error( `Caught exception: ${err}\n` +
+                   `Exception origin: ${origin}` )
+    } )
 }
