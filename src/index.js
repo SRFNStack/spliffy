@@ -1,37 +1,12 @@
 const log = require( './log' )
-const cluster = require( 'cluster' )
 
 /**
  * Startup function for the spliffy server
- * Spliffy will start up in a forked process so that if any uncaught exceptions are thrown a new process can be initialized and the server restarted.
- * Startup will exponentially back off if the server crashes within 1 second of starting up
+ * Startup will exponentially back off on consecutive failures
  * @param config See https://github.com/narcolepticsnowman/spliffy#config
  * @returns {Promise<void>} an empty promise...
  */
-let consecutiveFailures = 0
-let lastStart = new Date().getTime()
-const spliffy = ( config ) => {
-    if( cluster.isMaster ) {
-        cluster.fork()
-        cluster.on( 'exit', ( worker ) => {
-
-            const now = new Date().getTime()
-            if( now - lastStart <= 1000 ) {
-                consecutiveFailures++
-            } else {
-                consecutiveFailures = 0
-            }
-            const waitms = Math.pow( 2, consecutiveFailures ) * 100
-            log.error( `Server crashed, restarting in ${waitms}ms` )
-            setTimeout( () => {
-                cluster.fork()
-                lastStart = new Date().getTime()
-            }, waitms )
-        } )
-    } else {
-        require( './start' )( config )
-    }
-}
+const spliffy = ( config ) => require( './start' )( config )
 
 /**
  * A helper for creating a redirect handler
