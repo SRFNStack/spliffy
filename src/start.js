@@ -31,6 +31,7 @@ module.exports = async function( config ) {
     if( !config || !config.routeDir ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
     }
+    log.gne('Starting Spliffy!')
     serverConfig.current = config || {}
     Object.assign( content.contentHandlers, config.contentHandlers )
     if( !config.hasOwnProperty( 'decodePathParameters' ) ) serverConfig.current.decodePathParameters = true
