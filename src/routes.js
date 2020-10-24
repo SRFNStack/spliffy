@@ -213,6 +213,7 @@ const init = () => {
                 routes => {
                     state.initializing = false
                     state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
+                    log.gne("Routes Initialized!")
                 }
             )
 
