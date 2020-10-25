@@ -1,6 +1,6 @@
 {
   "name": "spliffy",
-  "version": "4.7.4",
+  "version": "4.7.5",
   "author": "Robert Kempton <r@snow87.com>",
   "private": false,
   "homepage": "https://github.com/narcolepticsnowman/spliffy",
@@ -24,7 +24,7 @@
     "rest"
   ],
   "dependencies": {
-    "acme-client": "^3.0.0",
+    "acme-client": "^4.0.2",
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
     "node-forge": "^0.10.0",
