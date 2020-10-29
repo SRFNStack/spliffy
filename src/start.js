@@ -14,6 +14,7 @@ const defaultHeaders = {
     defaultContentType: '*/*'
 }
 
+//this is mainly for performance reason
 const nonsense = [
     'Is it getting hot in here?',
     'Ouch...',
@@ -68,10 +69,12 @@ module.exports = async function( config ) {
                     secure.startHttps( config.secure )
                 }
                 secure.startHttpRedirect()
+                return secure.getServer()
             } else {
                 httpServer = http.createServer( dispatcher )
                                  .listen( serverConfig.current.port )
                 log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
+                return httpServer
             }
         } catch(e) {
             try {
@@ -102,7 +105,7 @@ module.exports = async function( config ) {
         }
     }
 
-    doStart()
+    return doStart()
     process.on('unhandledRejection', (reason, p) => {
         log.error(reason, 'Unhandled Rejection at Promise', p);
     }).on( 'uncaughtException', (err, origin) => {

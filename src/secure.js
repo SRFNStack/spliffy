@@ -53,6 +53,7 @@ module.exports = {
         state.acmeChallengeProvider = provider
     },
     startHttpRedirect,
+    getServer(){return state.server},
     updateIfChanged: ( newKeyData, newCertData ) => {
         if( !state.keyData || !state.certData || !state.keyData.equals( newKeyData ) || !state.certData.equals( newCertData ) ) {
             state.keyData = newKeyData

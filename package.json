@@ -1,6 +1,6 @@
 {
   "name": "spliffy",
-  "version": "4.7.5",
+  "version": "4.7.6",
   "author": "Robert Kempton <r@snow87.com>",
   "private": false,
   "homepage": "https://github.com/narcolepticsnowman/spliffy",
@@ -29,5 +29,8 @@
     "etag": "^1.8.1",
     "node-forge": "^0.10.0",
     "uuid": "^3.3.3"
+  },
+  "devDependencies": {
+    "ws": "^7.3.1"
   }
 }

@@ -1,0 +1,19 @@
+<html>
+<body>
+<ul id="messages"></ul>
+<script>
+
+    const messagesContainer = document.getElementById( 'messages' )
+    const socket = new WebSocket( 'ws://'+window.location.host)
+
+    const toLi = message => {
+        let li = document.createElement( 'li' )
+        li.innerText = message
+        return li
+    }
+
+    socket.onopen = () => socket.send( 'hello' )
+    socket.onmessage = message => messagesContainer.appendChild( toLi( message.data ) )
+</script>
+</body>
+</html>

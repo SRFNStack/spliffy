@@ -4,7 +4,7 @@ const log = require( './log' )
  * Startup function for the spliffy server
  * Startup will exponentially back off on consecutive failures
  * @param config See https://github.com/narcolepticsnowman/spliffy#config
- * @returns {Promise<void>} an empty promise...
+ * @returns {Promise<Server>} Either the https server if https is configured or the http server
  */
 const spliffy = ( config ) => require( './start' )( config )
 

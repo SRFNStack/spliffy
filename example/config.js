@@ -1,7 +1,7 @@
 module.exports = ( env ) =>
     ( {
         routeDir: __dirname + '/www',
-        port: 82,
+        port: 420,
         staticContentTypes: {
             '.spliff': 'image/png'
         },
