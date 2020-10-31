@@ -10,45 +10,63 @@ module.exports = {
         let contentType = configContentTypes && serverConfig.current.staticContentTypes[ extension ] || null
 
         contentType = contentType ? contentType : contentTypes[ extension ]
-        const stat = fs.statSync( fullPath )
-        let buffer = await
-            new Promise( ( resolve, reject ) =>
-                             fs.readFile( fullPath, ( err, data ) => {
-                                              if( err ) reject( err )
-                                              else resolve( data )
-                                          }
-                             )
+
+        const cache = {}
+
+        const readFile = async( fullPath ) => ( {
+            stat: fs.statSync( fullPath ),
+            content: await new Promise(
+                ( resolve, reject ) =>
+                    fs.readFile( fullPath, ( err, data ) => {
+                                     if( err ) reject( err )
+                                     else resolve( data )
+                                 }
+                    )
             )
-        let tag = etag( buffer )
-        if( !serverConfig.current.cacheStatic ) {
-            buffer = null
+        } )
+
+        const writeResponse = ( req, res, tag, stat, content ) => {
+            if( req.headers[ 'if-none-match' ] === tag ) {
+                return {
+                    statusCode: 304,
+                    statusMessage: 'Not Modified'
+                }
+            }
+            res.writeHead( 200, {
+                'content-type': contentType,
+                'content-length': stat.size,
+                'cache-control': serverConfig.current.staticCacheControl || 'max-age=600',
+                'ETag': tag
+            } )
+            let stream
+            if( content ) stream = new PassThrough().end( content ).pipe( res )
+            else stream = fs.createReadStream( fullPath ).pipe( res )
+
+            return new Promise( ( resolve ) => {
+                stream.on( 'finish', resolve )
+            } )
         }
+
+
         return {
-            GET: ( { req, res } ) => {
+            GET: async( { req, res } ) => {
                 if( !fs.existsSync( fullPath ) ) {
                     return {
                         statusCode: 404,
                         statusMessage: 'Not Found'
                     }
-                } else if( req.headers[ 'if-none-match' ] === tag ) {
-                    return {
-                        statusCode: 304,
-                        statusMessage: 'Not Modified'
-                    }
                 } else {
-                    res.writeHead( 200, {
-                        'content-type': contentType,
-                        'content-length': stat.size,
-                        'cache-control': serverConfig.current.staticCacheControl || 'max-age=600',
-                        'ETag': tag
-                    } )
-                    let stream
-                    if(buffer)  stream = new PassThrough().end(buffer).pipe(res)
-                    else  stream = fs.createReadStream( fullPath ).pipe( res )
+                    if( serverConfig.current.cacheStatic ) {
+                        if(!cache.content) {
+                            Object.assign(cache, await readFile(fullPath))
+                            cache.etag = etag( cache.content )
+                        }
+                        await writeResponse( req, res, etag( cache.content ), cache.stat, cache.content )
+                    } else {
+                        let file = await readFile( fullPath )
+                        await writeResponse( req, res, etag( file.content ), file.stat, file.content )
+                    }
 
-                    return new Promise( ( resolve ) => {
-                        stream.on( 'finish', resolve )
-                    } )
                 }
             }
         }
