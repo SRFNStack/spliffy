@@ -27,10 +27,8 @@ module.exports = {
 
         const writeResponse = ( req, res, tag, stat, content ) => {
             if( req.headers[ 'if-none-match' ] === tag ) {
-                return {
-                    statusCode: 304,
-                    statusMessage: 'Not Modified'
-                }
+                res.writeHead(304, 'Not Modified')
+                return
             }
             res.writeHead( 200, {
                 'content-type': contentType,
