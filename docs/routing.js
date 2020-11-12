@@ -86,6 +86,7 @@ export default div(
     //create a .mw.js file in any folder, export a middleware property, and it applies to the folder it's in and everything below it.
     // export a middleware property from any .rt.js file to only apply it to that file.
     // set middleware in the app config to apply to the entire app.
+    // middleware receives same arguments as express middleware: req, res, next
     //
     // export a middleware: array property to apply middleware to all methods
     // export a middleware: object property to only apply middleware to specified methods
