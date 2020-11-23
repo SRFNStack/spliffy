@@ -20,7 +20,8 @@ const { HTTP_METHODS } = require( './routes.js' )
  */
 const handle = async( url, res, req, body, handler, middleware ) => {
     try {
-        body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
+        if(body)
+            body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
         log.error( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
