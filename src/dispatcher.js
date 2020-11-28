@@ -7,7 +7,7 @@ const { setCookie } = require( './expressShim.js' )
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
-
+const uuid = require( 'uuid' ).v4
 
 /**
  * Actually handle an incoming request
@@ -20,7 +20,7 @@ const { HTTP_METHODS } = require( './routes.js' )
  */
 const handle = async( url, res, req, body, handler, middleware ) => {
     try {
-        if(body)
+        if( body )
             body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
     } catch(e) {
         log.error( 'Failed to parse request.', e )
@@ -42,8 +42,9 @@ const handle = async( url, res, req, body, handler, middleware ) => {
             handled.then( ( h ) => finalizeResponse( req, res, h ) )
                    .catch(
                        e => {
-                           log.error( e )
-                           handleError( res, e )
+                           let refId = uuid()
+                           log.error( e, refId )
+                           handleError( res, e, refId )
                        }
                    )
         } else {
@@ -51,18 +52,22 @@ const handle = async( url, res, req, body, handler, middleware ) => {
         }
 
     } catch(e) {
-        log.error( 'handler failed', e )
+        let refId = uuid()
+        log.error( 'handler failed', e, refId )
         if( middleware )
             await executeMiddleware( middleware, req, res, e )
-        handleError( res, e )
+        handleError( res, e, refId )
     }
 }
 
-const handleError = ( res, e ) => {
+const handleError = ( res, e, refId ) => {
     if( e.body && typeof e.body !== 'string' ) {
         e.body = JSON.stringify( e.body )
     }
-    end( res, e.statusCode || e.status || 500, e.statusMessage || e.message || 'Internal Server Error', e.body || '' )
+    if( serverConfig.current.errorTransformer ) {
+        e = serverConfig.current.errorTransformer( e, refId )
+    }
+    end( res, e.statusCode || e.status || 500, ( e.statusMessage || e.message || 'Internal Server Error' ) + ' refId: ' + refId, e.body || '' )
 }
 
 const end = ( res, code, message, body ) => {
@@ -91,7 +96,7 @@ const finalizeResponse = ( req, res, handled ) => {
                 body = handled.body
                 if( handled.headers ) {
                     Object.entries( handled.headers )
-                          .forEach( ( [ k, v ] ) => res.setHeader( k, v ) )
+                          .forEach( ( [k, v] ) => res.setHeader( k, v ) )
                 }
                 code = handled.statusCode || 200
                 message = handled.statusMessage || 'OK'
@@ -132,7 +137,7 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
                 ( !isError && current === normalMiddleware.length )
             ) {
                 if( mwErr )
-                    handleError( res, mwErr )
+                    handleError( res, mwErr, uuid() )
                 resolve()
             } else {
                 setTimeout( () => {
@@ -160,8 +165,8 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
 const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
     req.spliffyUrl = url
-    req = decorateRequest(req)
-    res = decorateResponse(res, req, finalizeResponse)
+    req = decorateRequest( req )
+    res = decorateResponse( res, req, finalizeResponse )
     let route = routes.find( url )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
         route = routes.find( parseUrl( serverConfig.current.notFoundRoute ) )
@@ -187,11 +192,12 @@ const handleRequest = async( req, res ) => {
                 }
             } )
         } catch(e) {
-            log.error( 'Handling request failed', e )
+            let refId = uuid()
+            log.error( 'Handling request failed', e, refId )
             if( route.middleware )
                 await executeMiddleware( route.middleware, req, res, e )
             if( !res.writableEnded )
-                handleError( res, e )
+                handleError( res, e, refId )
         }
     } else {
         end( res, 405, 'Method Not Allowed' )

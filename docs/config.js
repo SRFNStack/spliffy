@@ -12,6 +12,7 @@ export default div(
     notFoundRoute: "/404",
     acceptsDefault: "*/*",
     defaultContentType: "*/*",
+    errorTransformer: ( e, refId ) => e,
     contentHandlers: {
         'application/json': {
             read: requestBody => JSON.parse(requestBody),
@@ -65,6 +66,8 @@ export default div(
             ': The default mime type to use when accepting a request body. e({m},/) will convert objects from json by default' ),
         li( strong( 'defaultContentType' ),
             ': The default mime type to use when writing content to a response. will convert objects to json by default ' ),
+        li( strong( 'errorTransformer' ),
+            ': A function to transform errors to a more user friendly error. A refId is passed as the second argument to help correlate error messages.' ),
         li( strong( 'contentHandlers' ),
             ': Content negotiation handlers keyed by the media type they handle. Media types must be all lower case.',
             ul(
