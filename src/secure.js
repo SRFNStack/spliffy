@@ -1,6 +1,6 @@
 const serverConfig = require( './serverConfig' )
+const http2 = require( 'http2' )
 const http = require( 'http' )
-const https = require( 'https' )
 const PassThrough = require( 'stream' ).PassThrough
 const fs = require( 'fs' )
 const log = require('./log')
@@ -40,6 +40,30 @@ const startHttpRedirect = () => {
         .listen( serverConfig.current.port )
 }
 
+let updateIfChanged = ( newKeyData, newCertData ) => {
+    if( !state.keyData || !state.certData || !state.keyData.equals( newKeyData ) || !state.certData.equals( newCertData ) ) {
+        state.keyData = newKeyData
+        state.certData = newCertData
+        const certificate = forge.pki.certificateFromPem( state.certData )
+        state.cn = certificate.subject.getField( 'CN').value
+        let oldServer = state.server
+        state.server = http2.createSecureServer(
+            {
+                key: state.keyData,
+                cert: state.certData
+            },
+            dispatcher
+        )
+        if( oldServer ) {
+            oldServer.close( () => state.server.listen( serverConfig.current.secure.port ) )
+            oldServer = null
+        } else {
+            state.server.listen( serverConfig.current.secure.port )
+        }
+        log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.secure.port} and ${serverConfig.current.port}` )
+    }
+
+}
 module.exports = {
     startHttps: ( secure ) => {
         if( !secure.key || !secure.cert ) throw 'You must supply an secure key and cert!'
@@ -49,33 +73,6 @@ module.exports = {
         if( !fs.existsSync( certPath ) ) throw `Can't find https cert file: ${keyPath}`
         updateIfChanged( fs.readFileSync( keyPath ), fs.readFileSync( certPath ) )
     },
-    setAcmeChallengeProvider: ( provider ) => {
-        state.acmeChallengeProvider = provider
-    },
     startHttpRedirect,
-    getServer(){return state.server},
-    updateIfChanged: ( newKeyData, newCertData ) => {
-        if( !state.keyData || !state.certData || !state.keyData.equals( newKeyData ) || !state.certData.equals( newCertData ) ) {
-            state.keyData = newKeyData
-            state.certData = newCertData
-            const certificate = forge.pki.certificateFromPem( state.certData )
-            state.cn = certificate.subject.getField( 'CN').value
-            let oldServer = state.server
-            state.server = https.createServer(
-                {
-                    key: state.keyData,
-                    cert: state.certData
-                },
-                dispatcher
-            )
-            if( oldServer ) {
-                oldServer.close( () => state.server.listen( serverConfig.current.secure.port ) )
-                oldServer = null
-            } else {
-                state.server.listen( serverConfig.current.secure.port )
-            }
-            log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.secure.port} and ${serverConfig.current.port}` )
-        }
-
-    }
+    getServer(){return state.server}
 }

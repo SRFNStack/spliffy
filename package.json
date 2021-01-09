@@ -24,9 +24,9 @@
     "rest"
   ],
   "dependencies": {
-    "acme-client": "^4.0.2",
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
+    "greenlock-express": "^4.0.3",
     "node-forge": "^0.10.0",
     "uuid": "^3.3.3"
   },

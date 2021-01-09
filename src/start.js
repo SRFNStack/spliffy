@@ -5,9 +5,8 @@ const dispatcher = require( './dispatcher' )
 const content = require( './content' )
 const routes = require( './routes' )
 const secure = require( './secure' )
-const letsEncrypt = require( './letsEncrypt' )
 const log = require( './log' )
-
+const greenlockx = require( 'greenlock-express' )
 
 const defaultHeaders = {
     acceptsDefault: '*/*',
@@ -32,10 +31,12 @@ module.exports = async function( config ) {
     if( !config || !config.routeDir ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
     }
-    log.gne('Starting Spliffy!')
+    log.gne( 'Starting Spliffy!' )
     serverConfig.current = config || {}
     Object.assign( content.contentHandlers, config.contentHandlers )
-    if( !config.hasOwnProperty( 'decodePathParameters' ) ) serverConfig.current.decodePathParameters = true
+    if( !config.hasOwnProperty( 'decodePathParameters' ) ) {
+        serverConfig.current.decodePathParameters = true
+    }
 
 
     serverConfig.current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
@@ -59,17 +60,27 @@ module.exports = async function( config ) {
     const doStart = async() => {
         try {
             if( config.secure ) {
-                if( config.secure.letsEncrypt ) {
-                    letsEncrypt.init( true )
-                               .catch( e => {
-                                   setTimeout( () => {throw e} )
-                               } )
-
+                if( config.greenlock ) {
+                    return new Promise( ( resolve, reject ) => {
+                        try {
+                            greenlockx
+                                .init( config.greenlock )
+                                .ready( glx => {
+                                    let https = glx.http2Server( null, dispatcher )
+                                    https.listen( secure.port )
+                                    glx.httpServer().listen( serverConfig.current.port )
+                                    resolve(https)
+                                } )
+                        } catch(e) {
+                            log.error( 'Failed to init greenlock.', e )
+                        }
+                    } )
                 } else {
                     secure.startHttps( config.secure )
+                    secure.startHttpRedirect()
+                    log.gne( `Server initialized at ${new Date().toISOString()} and listening on port http:${serverConfig.current.port} https:${secure.port}` )
+                    return secure.getServer()
                 }
-                secure.startHttpRedirect()
-                return secure.getServer()
             } else {
                 httpServer = http.createServer( dispatcher )
                                  .listen( serverConfig.current.port )
@@ -81,12 +92,15 @@ module.exports = async function( config ) {
 
                 log.error( randomNonsense(), e )
                 const secureServers = secure.getServers()
-                if( secureServers.redirectServer )
+                if( secureServers.redirectServer ) {
                     await new Promise( res => secureServers.redirectServer.close( res ) )
-                if( secureServers.server )
+                }
+                if( secureServers.server ) {
                     await new Promise( res => secureServers.server.close( res ) )
-                if( httpServer )
+                }
+                if( httpServer ) {
                     await new Promise( res => httpServer.close( res ) )
+                }
                 const now = new Date().getTime()
                 if( now - lastStart <= 10 * 60 * 1000 ) {
                     consecutiveFailures++
@@ -105,11 +119,11 @@ module.exports = async function( config ) {
         }
     }
 
-    return doStart()
-    process.on('unhandledRejection', (reason, p) => {
-        log.error(reason, 'Unhandled Rejection at Promise', p);
-    }).on( 'uncaughtException', (err, origin) => {
+    process.on( 'unhandledRejection', ( reason, p ) => {
+        log.error( reason, 'Unhandled Rejection at Promise', p )
+    } ).on( 'uncaughtException', ( err, origin ) => {
         log.error( `Caught exception: ${err}\n` +
                    `Exception origin: ${origin}` )
     } )
+    return doStart()
 }

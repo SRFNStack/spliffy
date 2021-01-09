@@ -38,14 +38,7 @@ export default div(
     secure: {
         key: "/opt/certs/server.key",
         cert: "/opt/certs/server.cert",
-        port: 14420,
-        letsEncrypt: {
-                        directory: "staging",
-                        termsOfServiceAgreed: true,
-                        email: "public@spliffy.com",
-                        domains: ["www.spliffy.dev","spliffy.dev"],
-                        certPath: __dirname + "/certs/letsEncrypt"
-                    }
+        port: 14420
     }
 }
 `, null, '100%'
@@ -116,22 +109,10 @@ export default div(
         ),
         li( strong( 'secure' ), ': use https for all traffic. All traffic to the http port will be redirected to https' ),
         ul(
-            li( strong( 'key' ), ': The path to the key file to use for https' ),
-            li( strong( 'cert' ), ': The path to the certificate file to use for https' ),
+            li( strong( 'key' ), ': (Optional for manual config) The path to the key file to use for https' ),
+            li( strong( 'cert' ), ': (Optional for manual config) The path to the certificate file to use for https' ),
             li( strong( 'port' ), ': The port to listen on for https' ),
-            li( strong( 'letsEncrypt' ),
-                ': Use let"s encrypt to automatically issue trusted certificates. If this is set, key and cert are ignored.',
-                ul(
-                    li( strong( 'termsOfServiceAgreed' ), ': Whether you agree to the Subscriber Agreement: ',
-                        a( { href: 'https://letsencrypt.org/repository/' }, 'https://letsencrypt.org/repository/' ) ),
-                    li( strong( 'directory' ),
-                        ': The let"s encrypt directory to use. Must me one of ["staging","production"]' ),
-                    li( strong( 'domains' ),
-                        ': The array of domains that you want to obtain a certificate for. Wildcard domains are not supported.' ),
-                    li( strong( 'certPath' ), ': The directory to read certs from and place certs we generate in.' ),
-                    li( strong( 'email' ), ': The optional email to use for registering an account.' )
-                )
-            )
+            li( strong('greenlock'), ': The object to pass to greenlock-express.init, see ', a('https://www.npmjs.com/package/greenlock-express'))
         )
     )
 )

@@ -11,14 +11,10 @@ module.exports = ( env ) =>
             next()
         }],
         cacheStatic: true,
-        // secure: {
-        //     port: 4445,
-        //     letsEncrypt: {
-        //         directory: env === 'prod' ? 'production' : 'staging',
-        //         termsOfServiceAgreed: true,
-        //         email: 'public@spliffy.com',
-        //         domains: [ 'www.spliffy.dev', 'spliffy.dev' ],
-        //         certPath: __dirname + '/certs/letsEncrypt'
-        //     }
-        // }
+        greenlock: {
+            packageRoot: __dirname,
+            configDir: "./greenlock.d",
+            maintainerEmail: "spliffy@example.com",
+            cluster: false
+        }
     } )
