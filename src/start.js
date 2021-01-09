@@ -49,7 +49,7 @@ module.exports = async function( config ) {
         serverConfig.current.logAccess = true
     }
     serverConfig.current.port = config.port || 10420
-    routes.init()
+    await routes.init()
 
     let httpServer
 

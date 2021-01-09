@@ -195,29 +195,25 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
 /**
  * Load the routes
  */
-const init = () => {
+const init = async () => {
     if( !state.initializing ) {
         state.initializing = true
-        //debounce fs events
-        setTimeout( () => {
-            log.info( 'Loading routes' )
-            const fullRouteDir = path.resolve( serverConfig.current.routeDir )
-            if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
-            let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
-            Promise.all(
-                fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
-                  .map(
-                      ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
-                  )
-            ).then(
-                routes => {
-                    state.initializing = false
-                    state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
-                    log.gne("Routes Initialized!")
-                }
-            )
-
-        }, 0 )
+        log.info( 'Loading routes' )
+        const fullRouteDir = path.resolve( serverConfig.current.routeDir )
+        if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
+        let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
+        return Promise.all(
+            fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
+              .map(
+                  ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
+              )
+        ).then(
+            routes => {
+                state.initializing = false
+                state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
+                log.gne("Routes Initialized!")
+            }
+        )
     }
 
 }
