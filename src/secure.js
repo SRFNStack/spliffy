@@ -52,7 +52,7 @@ let updateIfChanged = ( newKeyData, newCertData ) => {
                 key: state.keyData,
                 cert: state.certData
             },
-            dispatcher
+            dispatcher.dispatch
         )
         if( oldServer ) {
             oldServer.close( () => state.server.listen( serverConfig.current.secure.port ) )
