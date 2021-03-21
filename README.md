@@ -38,7 +38,6 @@ start the server
 
 Go to `localhost:10420/spliffy`
 
-# Documentation
-See the full documentation here: https://narcolepticsnowman.github.io/spliffy/
+# [Documentation](https://srfnstack.github.io/spliffy/)
 
 #### [Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)
