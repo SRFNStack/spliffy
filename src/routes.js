@@ -8,7 +8,7 @@ const state = {
     initializing: false,
     hasPendingFsEvent: false
 }
-const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE' ]
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
 
 /**
  * Build a route data with an initialized route object
@@ -34,8 +34,9 @@ const getNewRouteData = ( name, routes ) => {
                 catchall: true
             }
         }
-    } else
+    } else {
         return { name, route: {} }
+    }
 }
 
 /**
@@ -66,7 +67,7 @@ const mergeMiddleware = ( incoming, existing ) => {
 const cloneMiddleware = ( middleware ) => {
     const clone = { ...middleware }
     for( let method in middleware ) {
-        clone[ method ] = [ ...( middleware[ method ] || [] ) ]
+        clone[ method ] = [...( middleware[ method ] || [] )]
     }
     return clone
 }
@@ -76,10 +77,9 @@ const cloneMiddleware = ( middleware ) => {
  * @param middleware
  */
 const validateMiddleware = ( middleware ) => {
-    if( Array.isArray( middleware ) )
+    if( Array.isArray( middleware ) ) {
         validateMiddlewareArray( middleware )
-
-    else if( typeof middleware === 'object' ) {
+    } else if( typeof middleware === 'object' ) {
         for( let method in middleware ) {
             //ensure methods are always available as uppercase
             let upMethod = method.toUpperCase()
@@ -92,8 +92,9 @@ const validateMiddleware = ( middleware ) => {
 }
 
 const validateMiddlewareArray = ( arr ) => {
-    if( !Array.isArray( arr ) )
+    if( !Array.isArray( arr ) ) {
         throw 'middleware must be an array of functions'
+    }
 
     arr.forEach( f => {
         if( typeof f !== 'function' ) {
@@ -107,9 +108,9 @@ const validateMiddlewareArray = ( arr ) => {
  * @param currentFile The file or directory to search for routes
  * @param path The full path to the current file
  * @param inheritedMiddleware Middleware that is inherited from the app or parent routes
- * @returns {Promise<{} | Promise<(Promise<(Promise<T | never>|{})[] | never>|{})[] | never>>}
+ * @param dataOnly Only collect route data, don't construct route handlers
  */
-const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
+const findRoutes = async( currentFile, path, inheritedMiddleware, dataOnly = false) => {
     let routes = {}
     if( currentFile.isDirectory() ) {
 
@@ -140,9 +141,20 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
                       )
     } else if( !serverConfig.current.staticMode && currentFile.name.endsWith( '.rt.js' ) ) {
         let routeData = getNewRouteData( currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), routes )
-        routes[ routeData.name ] = buildRoute( routeData.route, path, inheritedMiddleware )
+        routeData.path = path
+        if( dataOnly ) {
+            routes[ routeData.name ] = routeData
+        } else {
+            routes[ routeData.name ] = buildRoute( routeData.route, path, inheritedMiddleware )
+        }
     } else {
-        await setStaticRoutes( routes, currentFile, path, inheritedMiddleware )
+        if( dataOnly ) {
+            let routeData = getNewRouteData( currentFile.name, routes )
+            routeData.path = path
+            routes[ routeData.name ] = routeData
+        } else {
+            await setStaticRoutes( routes, currentFile, path, inheritedMiddleware )
+        }
     }
     return routes
 }
@@ -195,12 +207,14 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
 /**
  * Load the routes
  */
-const init = async () => {
+const init = async() => {
     if( !state.initializing ) {
         state.initializing = true
         log.info( 'Loading routes' )
         const fullRouteDir = path.resolve( serverConfig.current.routeDir )
-        if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
+        if( !fs.existsSync( fullRouteDir ) ) {
+            throw `can't find route directory: ${fullRouteDir}`
+        }
         let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
         return Promise.all(
             fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
@@ -211,7 +225,7 @@ const init = async () => {
             routes => {
                 state.initializing = false
                 state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
-                log.gne("Routes Initialized!")
+                log.gne( 'Routes Initialized!' )
             }
         )
     }
@@ -222,6 +236,24 @@ module.exports = {
     init,
     HTTP_METHODS,
     validateMiddleware,
+    async findRouteData( dir ) {
+        const fullRouteDir = path.resolve( dir )
+        if( !fs.existsSync( fullRouteDir ) ) {
+            throw `can't find route directory: ${fullRouteDir}`
+        }
+
+        let routes = await Promise.all(
+            fs.readdirSync( fullRouteDir, { withFileTypes: true } )
+              .map(
+                  ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, {}, true )
+              )
+        )
+
+        return routes.reduce((res, routeData)=>{
+            res[routeData.name] = routeData
+            return res
+        }, {})
+    },
     /**
      * Find a handler for the given url
      * @param url
@@ -233,7 +265,9 @@ module.exports = {
             return {}
         }
         let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
-        if( path === '' || path === '/' ) path = 'index'
+        if( path === '' || path === '/' ) {
+            path = 'index'
+        }
         let nextPart = path.indexOf( '/' )
         let route = state.routes
         let pathParameters = {}
