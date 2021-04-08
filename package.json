@@ -24,7 +24,6 @@
     "rest"
   ],
   "dependencies": {
-    "cls-hooked": "^4.2.2",
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
     "greenlock-express": "^4.0.3",

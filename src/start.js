@@ -66,7 +66,7 @@ module.exports = async function( config ) {
                             greenlockx
                                 .init( config.greenlock )
                                 .ready( glx => {
-                                    let https = glx.http2Server( null, dispatcher.dispatch )
+                                    let https = glx.http2Server( null, dispatcher )
                                     https.listen( secure.port )
                                     glx.httpServer().listen( serverConfig.current.port )
                                     resolve(https)
@@ -82,7 +82,7 @@ module.exports = async function( config ) {
                     return secure.getServer()
                 }
             } else {
-                httpServer = http.createServer( dispatcher.dispatch )
+                httpServer = http.createServer( dispatcher )
                                  .listen( serverConfig.current.port )
                 log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.port}` )
                 return httpServer

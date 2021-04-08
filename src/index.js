@@ -1,6 +1,4 @@
 const log = require( './log' )
-const { currentRequest, currentResponse } = require( './dispatcher.js' )
-
 
 /**
  * Startup function for the spliffy server
@@ -23,8 +21,5 @@ spliffy.redirect = ( location, permanent = true ) => () => ( {
 } )
 
 spliffy.log = log
-
-spliffy.currentRequest = currentRequest
-spliffy.currentResponse = currentResponse
 
 module.exports = spliffy

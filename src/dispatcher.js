@@ -8,7 +8,6 @@ const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
 const uuid = require( 'uuid' ).v4
-const createNamespace = require( 'cls-hooked' ).createNamespace
 
 /**
  * Actually handle an incoming request
@@ -21,9 +20,8 @@ const createNamespace = require( 'cls-hooked' ).createNamespace
  */
 const handle = async( url, res, req, body, handler, middleware ) => {
     try {
-        if( body ) {
+        if( body )
             body = content.handle( body, req.headers[ 'content-type' ], 'read' ).content
-        }
     } catch(e) {
         log.error( 'Failed to parse request.', e )
         end( res, 400, 'Failed to parse request body' )
@@ -56,9 +54,8 @@ const handle = async( url, res, req, body, handler, middleware ) => {
     } catch(e) {
         let refId = uuid()
         log.error( 'handler failed', e, refId )
-        if( middleware ) {
+        if( middleware )
             await executeMiddleware( middleware, req, res, e )
-        }
         handleError( res, e, refId )
     }
 }
@@ -139,9 +136,8 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
             if( ( isError && current === errorMiddleware.length ) ||
                 ( !isError && current === normalMiddleware.length )
             ) {
-                if( mwErr ) {
+                if( mwErr )
                     handleError( res, mwErr, uuid() )
-                }
                 resolve()
             } else {
                 setTimeout( () => {
@@ -166,11 +162,7 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
 
 }
 
-const requestContext = createNamespace( 'requestContext' )
-
-const handleRequest = async( req, res ) => requestContext.run( async() => {
-    requestContext.set('request', req)
-    requestContext.set('response', res)
+const handleRequest = async( req, res ) => {
     let url = parseUrl( req.url )
     req.spliffyUrl = url
     req = decorateRequest( req )
@@ -188,9 +180,8 @@ const handleRequest = async( req, res ) => requestContext.run( async() => {
             req.on( 'end', async() => {
                 url.pathParameters = route.pathParameters
 
-                if( route.middleware ) {
+                if( route.middleware )
                     await executeMiddleware( route.middleware, req, res )
-                }
                 if( !res.writableEnded ) {
                     if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
                         res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
@@ -203,28 +194,22 @@ const handleRequest = async( req, res ) => requestContext.run( async() => {
         } catch(e) {
             let refId = uuid()
             log.error( 'Handling request failed', e, refId )
-            if( route.middleware ) {
+            if( route.middleware )
                 await executeMiddleware( route.middleware, req, res, e )
-            }
-            if( !res.writableEnded ) {
+            if( !res.writableEnded )
                 handleError( res, e, refId )
-            }
         }
     } else {
         end( res, 405, 'Method Not Allowed' )
     }
-} )
+}
 
 module.exports =
-    {
-        dispatch( req, res ) {
-            try {
-                logAccess( req, res )
-                return handleRequest( req, res )
-            } catch(e) {
-                log.error( 'Failed handling request', e )
-            }
-        },
-        currentRequest: () => requestContext.get( 'request' ),
-        currentResponse: () => requestContext.get( 'response' )
+    ( req, res ) => {
+        try {
+            logAccess( req, res )
+            return handleRequest( req, res )
+        } catch(e) {
+            log.error( 'Failed handling request', e )
+        }
     }
