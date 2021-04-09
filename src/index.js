@@ -1,5 +1,4 @@
 const log = require( './log' )
-const routes = require( './routes.js' )
 
 /**
  * Startup function for the spliffy server
@@ -22,6 +21,5 @@ spliffy.redirect = ( location, permanent = true ) => () => ( {
 } )
 
 spliffy.log = log
-spliffy.findRouteData = routes.findRouteData
 
 module.exports = spliffy
