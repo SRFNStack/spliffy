@@ -8,7 +8,7 @@ const state = {
     initializing: false,
     hasPendingFsEvent: false
 }
-const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE' ]
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
 
 /**
  * Build a route data with an initialized route object
@@ -17,7 +17,7 @@ const HTTP_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD
  * @returns {{route: {}, name: *}|{route: {key: string}, name: string}|{route: {catchall: boolean}, name: string}}
  */
 const getNewRouteData = ( name, routes ) => {
-    if( name.startsWith( '$' ) ) {
+    if( name.startsWith( '$' ) && name.indexOf( '.' ) === -1 ) {
         if( 'variable' in routes ) {
             throw `You can not have two path variables in the same dir. Conflicting handlers: ${name} and \$${routes.variable.key}.`
         }
@@ -34,8 +34,9 @@ const getNewRouteData = ( name, routes ) => {
                 catchall: true
             }
         }
-    } else
+    } else {
         return { name, route: {} }
+    }
 }
 
 /**
@@ -66,7 +67,7 @@ const mergeMiddleware = ( incoming, existing ) => {
 const cloneMiddleware = ( middleware ) => {
     const clone = { ...middleware }
     for( let method in middleware ) {
-        clone[ method ] = [ ...( middleware[ method ] || [] ) ]
+        clone[ method ] = [...( middleware[ method ] || [] )]
     }
     return clone
 }
@@ -76,10 +77,9 @@ const cloneMiddleware = ( middleware ) => {
  * @param middleware
  */
 const validateMiddleware = ( middleware ) => {
-    if( Array.isArray( middleware ) )
+    if( Array.isArray( middleware ) ) {
         validateMiddlewareArray( middleware )
-
-    else if( typeof middleware === 'object' ) {
+    } else if( typeof middleware === 'object' ) {
         for( let method in middleware ) {
             //ensure methods are always available as uppercase
             let upMethod = method.toUpperCase()
@@ -92,8 +92,9 @@ const validateMiddleware = ( middleware ) => {
 }
 
 const validateMiddlewareArray = ( arr ) => {
-    if( !Array.isArray( arr ) )
+    if( !Array.isArray( arr ) ) {
         throw 'middleware must be an array of functions'
+    }
 
     arr.forEach( f => {
         if( typeof f !== 'function' ) {
@@ -114,7 +115,6 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
     if( currentFile.isDirectory() ) {
 
         let routeData = getNewRouteData( currentFile.name, routes )
-
         const files = fs.readdirSync( path, { withFileTypes: true } )
 
         const routeMiddleware = files
@@ -136,15 +136,34 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
                                 )
                       )
                       .then(
-                          routes => ( { [ routeData.name ]: routes.reduce( ( r, routes ) => ( { ...r, ...routes } ), routeData.route ) } )
+                          routes => ( {
+                              [ routeData.name ]: routes.reduce(
+                                  ( res, route ) => {
+                                      for( let name of Object.keys( route ) ) {
+                                          if( res[ name ] ) {
+                                              throw `Duplicate route name ${name} found in path: ${path}`
+                                          }
+                                      }
+                                      return Object.assign(res, route)
+                                  },
+                                  routeData.route
+                              )
+                          } )
                       )
     } else if( !serverConfig.current.staticMode && currentFile.name.endsWith( '.rt.js' ) ) {
-        let routeData = getNewRouteData( currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), routes )
-        routes[ routeData.name ] = buildRoute( routeData.route, path, inheritedMiddleware )
+        addRoute( routes, path, currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), buildRoute( {}, path, inheritedMiddleware ) )
     } else {
         await setStaticRoutes( routes, currentFile, path, inheritedMiddleware )
     }
     return routes
+}
+
+const addRoute = ( routes, path, name, route ) => {
+    let routeData = getNewRouteData( name, routes )
+    if( routes[ routeData.name ] ) {
+        throw `Duplicate route name found for route file ${path}`
+    }
+    routes[ routeData.name ] = Object.assign( routeData.route, route )
 }
 
 const setStaticRoutes = async( routes, f, path, inheritedMiddleware ) => {
@@ -153,15 +172,14 @@ const setStaticRoutes = async( routes, f, path, inheritedMiddleware ) => {
         static: true,
         middleware: inheritedMiddleware
     }
-    if( f.name.endsWith( '.html' ) || f.name.endsWith( '.htm' ) ) {
-        routes[ f.name.split( '.html' )[ 0 ] ] = route
-        routes[ f.name ] = route
-    } else if( f.name.startsWith( 'index.' ) ) {
-        routes[ f.name ] = route
-        routes[ 'index' ] = route
-    } else {
-        routes[ f.name ] = route
+
+    addRoute( routes, path, f.name, route )
+    for( let ext of serverConfig.current.resolveWithoutExtension ) {
+        if( f.name.endsWith( ext ) ) {
+            addRoute( routes, path, f.name.substr( 0, f.name.length - ext.length ), route )
+        }
     }
+
 }
 
 /**
@@ -195,12 +213,14 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
 /**
  * Load the routes
  */
-const init = async () => {
+const init = async() => {
     if( !state.initializing ) {
         state.initializing = true
         log.info( 'Loading routes' )
         const fullRouteDir = path.resolve( serverConfig.current.routeDir )
-        if( !fs.existsSync( fullRouteDir ) ) throw `can't find route directory: ${fullRouteDir}`
+        if( !fs.existsSync( fullRouteDir ) ) {
+            throw `can't find route directory: ${fullRouteDir}`
+        }
         let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
         return Promise.all(
             fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
@@ -210,8 +230,16 @@ const init = async () => {
         ).then(
             routes => {
                 state.initializing = false
-                state.routes = routes.reduce( ( r, rt ) => ( { ...r, ...rt } ), {} )
-                log.gne("Routes Initialized!")
+                state.routes = routes.reduce(
+                    ( res, route ) => {
+                        for( let name of Object.keys( route ) ) {
+                            if( res[ name ] ) {
+                                throw `Duplicate route name ${name} found in path: ${serverConfig.current.routeDir}`
+                            }
+                        }
+                        return Object.assign(res, route)
+                    }, {} )
+                log.gne( 'Routes Initialized!' )
             }
         )
     }
@@ -233,7 +261,9 @@ module.exports = {
             return {}
         }
         let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
-        if( path === '' || path === '/' ) path = 'index'
+        if( path === '' || path === '/' ) {
+            path = 'index'
+        }
         let nextPart = path.indexOf( '/' )
         let route = state.routes
         let pathParameters = {}

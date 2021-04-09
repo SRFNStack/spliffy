@@ -41,6 +41,17 @@ module.exports = async function( config ) {
 
     serverConfig.current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
     serverConfig.current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
+    serverConfig.current.resolveWithoutExtension = serverConfig.current.resolveWithoutExtension || []
+    if(!Array.isArray(serverConfig.current.resolveWithoutExtension)){
+        serverConfig.current.resolveWithoutExtension = [serverConfig.current.resolveWithoutExtension]
+    }
+
+    if(serverConfig.current.resolveWithoutExtension.indexOf('.htm') === -1){
+        serverConfig.current.resolveWithoutExtension.push('.htm')
+    }
+    if(serverConfig.current.resolveWithoutExtension.indexOf('.html') === -1){
+        serverConfig.current.resolveWithoutExtension.push('.html')
+    }
 
     if( serverConfig.current.middleware ) {
         validateMiddleware( serverConfig.current.middleware )

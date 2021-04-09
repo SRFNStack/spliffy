@@ -10,6 +10,7 @@ module.exports = ( env ) =>
             console.log("Look at me! I'm in the middle!")
             next()
         }],
+        resolveWithoutExtension: '.js',
         cacheStatic: true,
         greenlock: {
             packageRoot: __dirname,

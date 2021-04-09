@@ -12,6 +12,7 @@ export default div(
     notFoundRoute: "/404",
     acceptsDefault: "*/*",
     defaultContentType: "*/*",
+    resolveWithoutExtension: ['.js'],
     errorTransformer: ( e, refId ) => e,
     contentHandlers: {
         'application/json': {
@@ -59,6 +60,8 @@ export default div(
             ': The default mime type to use when accepting a request body. e({m},/) will convert objects from json by default' ),
         li( strong( 'defaultContentType' ),
             ': The default mime type to use when writing content to a response. will convert objects to json by default ' ),
+        li( strong( 'resolveWithoutExtension' ),
+            ': Add extensions to this list to allow resolving files without their extension. For example, setting [\'.js\'] would cause /foo.js to also be routable as /foo' ),
         li( strong( 'errorTransformer' ),
             ': A function to transform errors to a more user friendly error. A refId is passed as the second argument to help correlate error messages.' ),
         li( strong( 'contentHandlers' ),
