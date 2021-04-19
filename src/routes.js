@@ -223,7 +223,7 @@ const init = async() => {
         }
         let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
         return Promise.all(
-            fs.readdirSync( serverConfig.current.routeDir, { withFileTypes: true } )
+            fs.readdirSync( fullRouteDir, { withFileTypes: true } )
               .map(
                   ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
               )
@@ -234,7 +234,7 @@ const init = async() => {
                     ( res, route ) => {
                         for( let name of Object.keys( route ) ) {
                             if( res[ name ] ) {
-                                throw `Duplicate route name ${name} found in path: ${serverConfig.current.routeDir}`
+                                throw `Duplicate route name ${name} found in path: ${fullRouteDir}`
                             }
                         }
                         return Object.assign(res, route)
