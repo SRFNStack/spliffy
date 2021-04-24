@@ -14,6 +14,9 @@ module.exports = {
     warning( e ) {
         ifLevelEnabled(console.warn, 'WARN',[...arguments])
     },
+    warn( e ) {
+        ifLevelEnabled(console.warn, 'WARN',[...arguments])
+    },
     info( e ) {
         ifLevelEnabled(console.info, 'INFO',[...arguments])
     },
