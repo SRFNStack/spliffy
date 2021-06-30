@@ -26,7 +26,7 @@ export default ( sourceCode, demo, maxWidth = '100%' ) => {
                 } )
         } )
     obs.observe( src )
-    return div( { style: `margin: auto; display: flex; flex-direction: column; align-items: flex-end; padding-bottom: 15px;width: 100%; max-width: ${maxWidth};` },
+    return div( { style: `margin: auto; display: flex; flex-direction: column; padding-bottom: 15px;width: 100%; max-width: ${maxWidth};` },
                 demo &&
                 button( {onclick: () => state.isDemo = !state.isDemo, style: 'width: 65px; padding: 3px 0;' },
                         fnbind( state, ( st ) => st.isDemo ? 'Code' : 'Demo' )
