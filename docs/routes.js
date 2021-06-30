@@ -6,12 +6,13 @@ import { fnbind, fnlink, pathState, route } from './fntags.js'
 import secure from './secure.js'
 import staticFiles from './staticFiles.js'
 import config from './config.js'
-
+import middleware from './middleware.js'
 
 const routes = [
     { url: '/', component: home, absolute: true },
     { url: '/routing', linkText: 'Routing', component: routing },
     { url: '/static', linkText: 'Static Files', component: staticFiles },
+    { url: '/middleware', linkText: 'Middleware', component: middleware },
     { url: '/https', linkText: 'HTTPS', component: secure },
     { url: '/config', linkText: 'Config', component: config },
     // {url: "/reference", linkText: 'Reference', component: reference},
