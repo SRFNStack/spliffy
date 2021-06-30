@@ -1,7 +1,7 @@
 import { fnbind, fnstate } from './fntags.js'
 import { button, code, div, pre } from './fnelements.js'
 
-export default ( sourceCode, demo, maxWidth = '100%' ) => {
+export default ( sourceCode, demo, width = '100%' ) => {
     const state = fnstate( { isDemo: false } )
 
     const src = pre( { class: 'language-js', style: `font-size: 14px; width: 100%; box-sizing: border-box; box-shadow: 0px 0px 3px 0px rgba(0,0,0,0.75);` }, code( sourceCode.trim() ) )
@@ -26,7 +26,7 @@ export default ( sourceCode, demo, maxWidth = '100%' ) => {
                 } )
         } )
     obs.observe( src )
-    return div( { style: `margin: auto; display: flex; flex-direction: column; padding-bottom: 15px;width: 100%; max-width: ${maxWidth};` },
+    return div( { style: `margin: auto; display: flex; flex-direction: column; padding-bottom: 15px;width: ${width}; max-width: 94vw;` },
                 demo &&
                 button( {onclick: () => state.isDemo = !state.isDemo, style: 'width: 65px; padding: 3px 0;' },
                         fnbind( state, ( st ) => st.isDemo ? 'Code' : 'Demo' )
