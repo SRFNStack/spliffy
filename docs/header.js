@@ -20,5 +20,5 @@ export default header( { class: 'container text-center' },
               ),
          ),
          nav( { class: 'flex-center', style: 'border-bottom: solid 1px darkgray; background-color: ' + primaryColor },
-              div( { class: 'flex-center noselect' }, ...routeNavItems() ) )
+              div( { class: 'flex-center noselect', style: 'flex-wrap: wrap;' }, ...routeNavItems() ) )
     )

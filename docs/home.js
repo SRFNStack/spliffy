@@ -10,9 +10,15 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
                     p( prismCode( 'cd ~/app && npm install spliffy' ) ),
                     p( 'Create a handler for the desired route name (a regular js file with the suffix .rt.js) ' ),
                     p( prismCode( 'vi ~/app/www/spliffy.rt.js' ) ),
-                    prismCode( 'module.exports = {\n    GET:() => ({hello: "spliffy"})\n}' ),
+                    prismCode( `
+module.exports = {
+    GET:() => ({hello: "spliffy"})
+}` ),
                     p( 'Create the start script, ', prismCode( 'vi ~/app/serve.js' ) ),
-                    pre( prismCode( 'require(\'spliffy\')({routeDir: __dirname+ \'/www\'})' ) ),
+                    pre( prismCode( `
+require(\'spliffy\')({
+    routeDir: __dirname+ \'/www\'
+})` ) ),
                     p( 'The spliffy.rt.js file in ~/app/www creates the route',
                        prismCode( '/spliffy' ) ),
                     p( 'See ', fnlink( { to: '/config' }, 'Config' ), ' for a complete set of options.' ),
