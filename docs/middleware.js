@@ -5,7 +5,7 @@ export default div(
         'Spliffy supports express.js style middleware and works with some existing express.js middleware. '
     ),
     p(
-        'Use of ',a({href: 'https://www.passportjs.org/'},'Passport'),' is supported and encouraged.'
+        a({href: 'https://www.passportjs.org/'},'Passport'),' and ',a({href: 'https://github.com/helmetjs/helmet'},'Helmet'),' are supported and their use is encouraged.'
     ),
     p(
         'Middleware is a function that receives three arguments: ',code('request, response, next. ')

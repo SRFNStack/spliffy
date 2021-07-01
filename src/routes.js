@@ -1,8 +1,10 @@
 const fs = require( 'fs' )
-const staticHandler = require( './staticHandler' )
 const path = require( 'path' )
 const serverConfig = require( './serverConfig' )
 const log = require( './log' )
+const { validateMiddleware, mergeMiddleware } = require( "./middleware" );
+const { getNewRouteData, addRoute, addStaticRoute } = require( "./routeUtil" );
+const { addNodeModuleRoutes } = require( "./nodeModuleHandler" );
 const state = {
     routes: {},
     initializing: false,
@@ -11,106 +13,13 @@ const state = {
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
 
 /**
- * Build a route data with an initialized route object
- * @param name The name of the route
- * @param routes The current routes, used for validation
- * @returns {{route: {}, name: *}|{route: {key: string}, name: string}|{route: {catchall: boolean}, name: string}}
- */
-const getNewRouteData = ( name, routes ) => {
-    if( name.startsWith( '$' ) && name.indexOf( '.' ) === -1 ) {
-        if( 'variable' in routes ) {
-            throw `You can not have two path variables in the same dir. Conflicting handlers: ${name} and \$${routes.variable.key}.`
-        }
-        return {
-            name: 'variable',
-            route: {
-                key: name.substr( 1 )
-            }
-        }
-    } else if( name.endsWith( '+' ) ) {
-        return {
-            name: name.substr( 0, name.length - 1 ),
-            route: {
-                catchall: true
-            }
-        }
-    } else {
-        return { name, route: {} }
-    }
-}
-
-/**
- * middleware is stored as an object where the properties are request methods the middleware applies to
- * if a middleware applies to all methods, the property ALL is used
- * example:
- * {
- *     GET: [(req,res,next)=>console.log('ice cream man')]
- *     POST: [(req,res,next)=>console.log('gelato')]
- *     ALL: [(req,res,next)=>console.log('bruce banner')]
- * }
- */
-const mergeMiddleware = ( incoming, existing ) => {
-    const mergeInto = cloneMiddleware( existing )
-
-    validateMiddleware( incoming )
-    if( Array.isArray( incoming ) ) {
-        mergeInto.ALL = ( existing.ALL || [] ).concat( incoming )
-    } else if( typeof incoming === 'object' ) {
-        for( let method in incoming ) {
-            let upMethod = method.toUpperCase()
-            mergeInto[ upMethod ] = ( mergeInto[ method ] || [] ).concat( incoming[ upMethod ] || [] )
-        }
-    }
-    return mergeInto
-}
-
-const cloneMiddleware = ( middleware ) => {
-    const clone = { ...middleware }
-    for( let method in middleware ) {
-        clone[ method ] = [...( middleware[ method ] || [] )]
-    }
-    return clone
-}
-
-/**
- * Ensure the given middleware is valid
- * @param middleware
- */
-const validateMiddleware = ( middleware ) => {
-    if( Array.isArray( middleware ) ) {
-        validateMiddlewareArray( middleware )
-    } else if( typeof middleware === 'object' ) {
-        for( let method in middleware ) {
-            //ensure methods are always available as uppercase
-            let upMethod = method.toUpperCase()
-            middleware[ upMethod ] = middleware[ method ]
-            validateMiddlewareArray( middleware[ upMethod ] )
-        }
-    } else {
-        throw new Error( 'Invalid middleware definition: ' + middleware )
-    }
-}
-
-const validateMiddlewareArray = ( arr ) => {
-    if( !Array.isArray( arr ) ) {
-        throw 'middleware must be an array of functions'
-    }
-
-    arr.forEach( f => {
-        if( typeof f !== 'function' ) {
-            throw 'Each element in the array of middleware must be a function'
-        }
-    } )
-}
-
-/**
  * Recursively walk the specified directory to discover all of the routes and middleware
  * @param currentFile The file or directory to search for routes
  * @param path The full path to the current file
  * @param inheritedMiddleware Middleware that is inherited from the app or parent routes
  * @returns {Promise<{} | Promise<(Promise<(Promise<T | never>|{})[] | never>|{})[] | never>>}
  */
-const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
+const findRoutes = async ( currentFile, path, inheritedMiddleware ) => {
     let routes = {}
     if( currentFile.isDirectory() ) {
 
@@ -130,57 +39,34 @@ const findRoutes = async( currentFile, path, inheritedMiddleware ) => {
             .reduce( ( result, incoming ) => mergeMiddleware( incoming, result ), inheritedMiddleware )
 
         return Promise.all( files
-                                .filter( f => !f.name.endsWith( '.mw.js' ) )
-                                .map(
-                                    ( f ) => findRoutes( f, path + '/' + f.name, routeMiddleware )
-                                )
-                      )
-                      .then(
-                          routes => ( {
-                              [ routeData.name ]: routes.reduce(
-                                  ( res, route ) => {
-                                      for( let name of Object.keys( route ) ) {
-                                          if( res[ name ] ) {
-                                              throw `Duplicate route name ${name} found in path: ${path}`
-                                          }
-                                      }
-                                      return Object.assign(res, route)
-                                  },
-                                  routeData.route
-                              )
-                          } )
-                      )
+            .filter( f => !f.name.endsWith( '.mw.js' ) )
+            .map(
+                ( f ) => findRoutes( f, path + '/' + f.name, routeMiddleware )
+            )
+        )
+            .then(
+                routes => ( {
+                    [routeData.name]: routes.reduce(
+                        ( res, route ) => {
+                            for( let name of Object.keys( route ) ) {
+                                if( res[name] ) {
+                                    throw `Duplicate route name ${name} found in path: ${path}`
+                                }
+                            }
+                            return Object.assign( res, route )
+                        },
+                        routeData.route
+                    )
+                } )
+            )
     } else if( !serverConfig.current.staticMode && currentFile.name.endsWith( '.rt.js' ) ) {
         addRoute( routes, path, currentFile.name.substr( 0, currentFile.name.length - '.rt.js'.length ), buildRoute( {}, path, inheritedMiddleware ) )
     } else {
-        await setStaticRoutes( routes, currentFile, path, inheritedMiddleware )
+        await addStaticRoute( routes, currentFile, path, inheritedMiddleware )
     }
     return routes
 }
 
-const addRoute = ( routes, path, name, route ) => {
-    let routeData = getNewRouteData( name, routes )
-    if( routes[ routeData.name ] ) {
-        throw `Duplicate route name found for route file ${path}`
-    }
-    routes[ routeData.name ] = Object.assign( routeData.route, route )
-}
-
-const setStaticRoutes = async( routes, f, path, inheritedMiddleware ) => {
-    let route = {
-        handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
-        static: true,
-        middleware: inheritedMiddleware
-    }
-
-    addRoute( routes, path, f.name, route )
-    for( let ext of serverConfig.current.resolveWithoutExtension ) {
-        if( f.name.endsWith( ext ) ) {
-            addRoute( routes, path, f.name.substr( 0, f.name.length - ext.length ), route )
-        }
-    }
-
-}
 
 /**
  * load and gather data about the specified route handler file
@@ -200,11 +86,11 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
         if( HTTP_METHODS.indexOf( method ) === -1 ) {
             throw `Method: ${method} in file ${path} is not a valid http method. It must be one of: ${HTTP_METHODS}. Method names must be all uppercase.`
         }
-        let handler = handlers[ method ]
+        let handler = handlers[method]
         if( typeof handler !== 'function' ) {
-            throw `Request method ${method} must be a function. Got: ${handlers[ method ]}`
+            throw `Request method ${method} must be a function. Got: ${handlers[method]}`
         }
-        route.handler[ method ] = handler
+        route.handler[method] = handler
     }
 
     return route
@@ -213,7 +99,7 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
 /**
  * Load the routes
  */
-const init = async() => {
+const init = async () => {
     if( !state.initializing ) {
         state.initializing = true
         log.info( 'Loading routes' )
@@ -224,24 +110,25 @@ const init = async() => {
         let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
         return Promise.all(
             fs.readdirSync( fullRouteDir, { withFileTypes: true } )
-              .map(
-                  ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
-              )
+                .map(
+                    ( f ) => findRoutes( f, fullRouteDir + '/' + f.name, appMiddleware )
+                )
         ).then(
             routes => {
                 state.initializing = false
                 state.routes = routes.reduce(
                     ( res, route ) => {
                         for( let name of Object.keys( route ) ) {
-                            if( res[ name ] ) {
+                            if( res[name] ) {
                                 throw `Duplicate route name ${name} found in path: ${fullRouteDir}`
                             }
                         }
-                        return Object.assign(res, route)
+                        return Object.assign( res, route )
                     }, {} )
                 log.gne( 'Routes Initialized!' )
+                return state.routes
             }
-        )
+        ).then( addNodeModuleRoutes )
     }
 
 }
@@ -270,9 +157,9 @@ module.exports = {
         do {
             let part = nextPart > -1 ? path.substr( 0, nextPart ) : path
             if( part in route ) {
-                route = route[ part ]
+                route = route[part]
             } else if( route.variable ) {
-                pathParameters[ route.variable.key ] = serverConfig.current.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
+                pathParameters[route.variable.key] = serverConfig.current.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
                 route = route.variable || {}
             } else {
                 route = {}

@@ -2,33 +2,47 @@ const serverConfig = require( './serverConfig' )
 
 const contentHandlers = {
     'application/json': {
-        read: s => JSON.parse( s ),
-        write: s => JSON.stringify( s )
+        deserialize: s => JSON.parse( s ),
+        serialize: s => JSON.stringify( s )
     },
     '*/*': {
-        read: o => {
+        deserialize: o => {
             if( typeof o === 'string' ) {
                 try {
                     return JSON.parse( o )
-                } catch(e) {}
+                } catch( e ) {
+                }
             }
             return o && o.toString()
         },
-        write: o => typeof o === 'object' ? JSON.stringify( o ) : o && o.toString()
+        serialize: o => typeof o === 'object' ? JSON.stringify( o ) : o && o.toString()
     }
 }
-module.exports = {
-    handle( content, contentTypeHeader, direction ) {
-        if( content !== undefined && contentTypeHeader ) {
-            for( let contentType of contentTypeHeader.split( ',' ) ) {
-                contentType = contentType && contentType.toLowerCase().split(";")[0]
-                if( contentHandlers[ contentType ] && typeof contentHandlers[ contentType ][ direction ] === 'function' ) {
-                    return { contentType: contentType, content: contentHandlers[ contentType ][ direction ]( content ) }
-                }
-            }
 
+function getHandler( contentType ) {
+    //content-type should be singular https://greenbytes.de/tech/webdav/rfc2616.html#rfc.section.14.17
+    let handler = contentHandlers[contentType];
+    if( contentType
+        && handler
+        && typeof handler
+    ) {
+        if( typeof handler.serialize !== 'function' ) {
+            throw new Error( `Content handlers must provide a serialize function. ${handler}` )
         }
-        return { content: contentHandlers[ serverConfig.current.acceptsDefault ][ direction ]( content ) }
+        if( typeof handler.deserialize !== 'function' ) {
+            throw new Error( `Content handlers must provide a deserialize function. ${handler}` )
+        }
+        return handler
+    }
+    return contentHandlers[ serverConfig.current.acceptsDefault ]
+}
+
+module.exports = {
+    serialize( content, contentType ) {
+        return getHandler( contentType ).serialize( content )
+    },
+    deserialize( content, contentType ) {
+        return getHandler( contentType ).deserialize( content )
     },
     contentHandlers
 }

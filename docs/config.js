@@ -16,8 +16,8 @@ export default div(
     errorTransformer: ( e, refId ) => e,
     contentHandlers: {
         'application/json': {
-            read: requestBody => JSON.parse(requestBody),
-            write: responseBody => JSON.stringify(responseBody)
+            deserialize: requestBody => JSON.parse(requestBody),
+            serialize: responseBody => JSON.stringify(responseBody)
         }
     },
     staticContentTypes: {
@@ -67,8 +67,8 @@ export default div(
         li( strong( 'contentHandlers' ),
             ': Content negotiation handlers keyed by the media type they handle. Media types must be all lower case.',
             ul(
-                li( strong( 'read' ), ': A method to convert the request body to an object' ),
-                li( strong( 'write' ), ': A method to convert the response body to a string' )
+                li( strong( 'deserialize' ), ': A method to convert the request body to an object' ),
+                li( strong( 'serialize' ), ': A method to convert the response body to a string' )
             )
         ),
         li( strong( 'staticContentTypes' ),
