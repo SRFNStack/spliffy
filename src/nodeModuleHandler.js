@@ -6,8 +6,14 @@ const { addStaticRoute } = require( "./routeUtil" );
 
 
 const stripLeadingSlash = p => p.startsWith( '/' ) ? p.substr( 1 ) : p
-//TODO add docs
+
 module.exports = {
+    /**
+     This method will add all of the configured node_module files to the given routes.
+     The configured node moduleRoutes must be explicit files, no pattern matching is supported.
+     Generating the list of files using pattern matching yourself is highly discouraged.
+     It is much safer to explicitly list every file you wish to be served so you don't inadvertently serve additional files.
+     */
     async addNodeModuleRoutes( routes ) {
         let nodeModuleRoutes = serverConfig.current.nodeModuleRoutes;
         if( nodeModuleRoutes && typeof nodeModuleRoutes === 'object' ) {
