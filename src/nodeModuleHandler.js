@@ -6,11 +6,7 @@ const { addStaticRoute } = require( "./routeUtil" );
 
 
 const stripLeadingSlash = p => p.startsWith( '/' ) ? p.substr( 1 ) : p
-// const nmr = {
-//     //uses routeDir/../node_modules by default
-//     nodeModulesPath,
-//     routePrefix,
-// }
+//TODO add docs
 module.exports = {
     async addNodeModuleRoutes( routes ) {
         let nodeModuleRoutes = serverConfig.current.nodeModuleRoutes;
