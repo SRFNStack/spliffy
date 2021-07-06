@@ -1,11 +1,8 @@
 const serverConfig = require('./serverConfig')
 
-module.exports = url => {
-    let queryStart = url.indexOf( '?' )
-    let path = queryStart > -1 ? url.substr( 0, queryStart ) : url
+module.exports = (path, query) => {
     let parsedUrl = { path: path, query: {} }
-    if( queryStart > -1 ) {
-        let query = url.substr( queryStart + 1 )
+    if( query ) {
         let nextParam = query.indexOf( '&' )
         let kvs = []
         do {

@@ -56,12 +56,11 @@ const validateMiddlewareArray = ( arr ) => {
     if( !Array.isArray( arr ) ) {
         throw 'middleware must be an array of functions'
     }
-
-    arr.forEach( f => {
+    for(let f of arr){
         if( typeof f !== 'function' ) {
             throw 'Each element in the array of middleware must be a function'
         }
-    } )
+    }
 }
 
 async function executeMiddleware( middlewarez, req, res, reqErr ) {

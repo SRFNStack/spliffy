@@ -1,23 +1,28 @@
-const serverConfig = require( './serverConfig' )
-
+let defaultHandler = {
+    deserialize: o => {
+        try {
+            return JSON.parse( typeof o === 'string' ? o : String( o ) )
+        } catch( e ) {
+            return o
+        }
+    },
+    serialize: o => {
+        if(o instanceof Buffer || typeof o === 'string'){
+            return o
+        }
+        return JSON.stringify( typeof o === 'object' ? o : o && o.toString() )
+    }
+};
 const contentHandlers = {
     'application/json': {
-        deserialize: s => JSON.parse( s ),
+        deserialize: s => JSON.parse( typeof s === 'string' ? s : String( s ) ),
         serialize: s => JSON.stringify( s )
     },
-    '*/*': {
-        deserialize: o => {
-            if( typeof o === 'string' ) {
-                try {
-                    return JSON.parse( o )
-                } catch( e ) {
-                }
-            }
-            return o && o.toString()
-        },
-        serialize: o => typeof o === 'object' ? JSON.stringify( o ) : o && o.toString()
-    }
+    'application/octet-stream': defaultHandler,
+    '*/*': defaultHandler
 }
+
+let _acceptsDefault = '*/*'
 
 function getHandler( contentType ) {
     //content-type should be singular https://greenbytes.de/tech/webdav/rfc2616.html#rfc.section.14.17
@@ -34,7 +39,7 @@ function getHandler( contentType ) {
         }
         return handler
     }
-    return contentHandlers[ serverConfig.current.acceptsDefault ]
+    return contentHandlers[_acceptsDefault]
 }
 
 module.exports = {
@@ -44,5 +49,8 @@ module.exports = {
     deserialize( content, contentType ) {
         return getHandler( contentType ).deserialize( content )
     },
-    contentHandlers
+    initContentHandlers( handlers, acceptsDefault ) {
+        Object.assign( handlers, contentHandlers )
+        _acceptsDefault = acceptsDefault
+    }
 }

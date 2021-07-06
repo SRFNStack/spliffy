@@ -1,20 +1,84 @@
 const cookie = require( 'cookie' )
-const setCookie = ( res ) => function() {return res.setHeader( 'set-cookie', [ ...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments ) ] )}
+const serverConfig = require( './serverConfig' )
+const parseUrl = require( './parseUrl' )
+const setCookie = ( res ) => function() {
+    return res.setHeader( 'set-cookie', [...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments )] )
+}
+const log = require( './log' )
+const addressArrayBufferToString = addrBuf => String.fromCharCode.apply( null, new Int8Array( addrBuf ) )
+
+function toArrayBuffer( buffer ) {
+    return buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength );
+}
+
 /**
  * Provide a minimal set of shims to make most middleware, like passport, work
  * @type {{decorateResponse(*=, *=, *): *, decorateRequest(*): *}}
  */
 module.exports = {
     setCookie,
-    decorateRequest( req ) {
-        req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
-        req.query = req.spliffyUrl.query
+    decorateRequest( req, res ) {
+        req.url = req.getUrl()+"?"+req.getQuery()
+        req.spliffyUrl = parseUrl( req.getUrl(), req.getQuery() )
+        req.headers = {}
+        req.method = req.getMethod().toUpperCase()
+        req.remoteAddress = addressArrayBufferToString( res.getRemoteAddressAsText() )
+        req.proxiedRemoteAddress = addressArrayBufferToString( res.getProxiedRemoteAddressAsText() ) || undefined
+        req.forEach( ( header, value ) => req.headers[header] = value )
+        if( serverConfig.current.parseCookie ) {
+            req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
+        }
         return req
     },
     decorateResponse( res, req, finalizeResponse ) {
+        res.onAborted( () => {
+            log.error( "Request was aborted prematurely" )
+        } )
+        const writeHead = {}
+        res.headers = {}
+        res.setHeader = ( header, value ) => {
+            res.headers[header.toLowerCase()] = value
+        }
+        res.removeHeader = header => delete res.headers[header.toLowerCase()]
+        res.flushHeaders = () => {
+            // https://nodejs.org/api/http.html#http_response_writehead_statuscode_statusmessage_headers
+            //When headers have been set with response.setHeader(), they will be merged with any headers passed to response.writeHead(), with the headers passed to response.writeHead() given precedence.
+            Object.assign( res.headers, writeHead )
+            for(let header of Object.keys( res.headers )){
+                res.writeHeader( header, res.headers[header].toString() )
+            }
+        }
+        res.writeHead = ( status, headers ) => {
+            this.statusCode = status
+            res.assignHeaders( headers )
+        }
+        res.assignHeaders = headers => {
+            for( let header of Object.keys( headers ) ) {
+                writeHead[header.toLowerCase()] = headers[header]
+            }
+        }
+        res.getHeader = header => {
+            let lc = header.toLowerCase()
+            return writeHead[lc] || res.headers[lc]
+        }
         res.status = ( code ) => {
             this.statusCode = code
             return this
+        }
+
+        const ogEnd = res.end
+
+        res.end = (body) =>{
+            res.finalize(body)
+        }
+
+        res.finalize = body => {
+            if(res.writableEnded || res.aborted) return
+            res.writableEnded = true
+            res.aborted = true
+            res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
+            res.flushHeaders()
+            ogEnd.call(res, body )
         }
         res.redirect = function( code, location ) {
             if( arguments.length === 1 ) {

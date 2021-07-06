@@ -52,8 +52,8 @@ require(\'spliffy\')({
                         ),
                         li( strong( 'body' ), ': The body of the request' ),
                         li( strong( 'headers' ), ': The request headers' ),
-                        li( strong( 'req' ), ': The node http.IncomingMessage with the additional property \'cookies\' that contains the cookies as parsed by the cookie library' ),
-                        li( strong( 'res' ), ': The un-adulterated node http.ServerResponse' ),
+                        li( strong( 'req' ), ': A µWebSockets.js request adapted to function like an express request' ),
+                        li( strong( 'res' ), ': A µWebSockets.js response adapted to function like an express response' ),
                         li( strong( 'setCookie' ),
                             ': A helper function for setting cookies on the response. Arguments are passed verbatim to ',
                             a( { href: 'https://www.npmjs.com/package/cookie#cookieserializename-value-options' }, 'cookie.serialize' ) )

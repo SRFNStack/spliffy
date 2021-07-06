@@ -25,11 +25,5 @@ module.exports = ( ) =>
           ]
         },
         resolveWithoutExtension: '.js',
-        cacheStatic: true,
-        greenlock: {
-            packageRoot: __dirname,
-            configDir: "./greenlock.d",
-            maintainerEmail: "spliffy@example.com",
-            cluster: false
-        }
+        cacheStatic: true
     } )

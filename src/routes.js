@@ -102,12 +102,11 @@ const buildRoute = ( route, path, inheritedMiddleware ) => {
 const init = async () => {
     if( !state.initializing ) {
         state.initializing = true
-        log.info( 'Loading routes' )
         const fullRouteDir = path.resolve( serverConfig.current.routeDir )
         if( !fs.existsSync( fullRouteDir ) ) {
             throw `can't find route directory: ${fullRouteDir}`
         }
-        let appMiddleware = mergeMiddleware( serverConfig.current.middleware, {} )
+        let appMiddleware = mergeMiddleware( serverConfig.current.middleware || [], {} )
         return Promise.all(
             fs.readdirSync( fullRouteDir, { withFileTypes: true } )
                 .map(
@@ -125,7 +124,6 @@ const init = async () => {
                         }
                         return Object.assign( res, route )
                     }, {} )
-                log.gne( 'Routes Initialized!' )
                 return state.routes
             }
         ).then( addNodeModuleRoutes )

@@ -1,6 +1,6 @@
-
 const staticHandler = require( './staticHandler' )
 const serverConfig = require( './serverConfig' )
+const contentTypes = require( './content-types.js' )
 
 const addRoute = ( routes, path, name, route ) => {
     let routeData = getNewRouteData( name, routes )
@@ -11,8 +11,12 @@ const addRoute = ( routes, path, name, route ) => {
 }
 
 const addStaticRoute = async ( routes, f, path, inheritedMiddleware ) => {
+    const extension = f.name.indexOf( '.' ) > -1 ? f.name.slice( f.name.lastIndexOf( '.' ) ).toLowerCase() : 'default'
+    let contentType = serverConfig.current.staticContentTypes && serverConfig.current.staticContentTypes[extension] || null
+
+    contentType = contentType ? contentType : contentTypes[extension]
     let route = {
-        handler: await staticHandler.create( path, f.name, serverConfig.current.staticContentTypes ),
+        handler: await staticHandler.create( path, contentType ),
         static: true,
         middleware: inheritedMiddleware
     }

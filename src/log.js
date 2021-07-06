@@ -1,34 +1,43 @@
 const inspect = require( 'util' ).inspect
-const serverConfig = require('./serverConfig')
+const levelOrder = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 }
+let logAccess = true
+let logLevel = levelOrder.INFO
 
-const ifLevelEnabled = (fn, level, args) =>{
-    const configLevel = levelOrder[serverConfig.current.logLevel] || levelOrder.INFO
-    if(!levelOrder[level] || levelOrder[level] >= configLevel){
-        fn(`[${new Date().toISOString()}] [${level}]  ${args.map( a => typeof a === 'string' ? a : inspect( a, { depth: null } ) ).join( ' ' )}`)
+const ifLevelEnabled = ( fn, level, args ) => {
+    const configLevel = levelOrder[logLevel] || levelOrder.INFO
+    if( !levelOrder[level] || levelOrder[level] >= configLevel ) {
+        fn( `[${new Date().toISOString()}] [${level}]  ${args.map( a => typeof a === 'string' ? a : inspect( a, { depth: null } ) ).join( ' ' )}` )
     }
 }
 
-const levelOrder = {DEBUG: 0,INFO: 1, WARN: 2, ERROR: 3}
-
 module.exports = {
+    setLogAccess( enable ) {
+        logAccess = !!enable
+    },
+    setLogLevel( level ) {
+        if( !levelOrder.hasOwnProperty( level ) ) {
+            throw `Invalid level: ${level}`
+        }
+        logLevel = level
+    },
     warning( e ) {
-        ifLevelEnabled(console.warn, 'WARN',[...arguments])
+        ifLevelEnabled( console.warn, 'WARN', [...arguments] )
     },
     warn( e ) {
-        ifLevelEnabled(console.warn, 'WARN',[...arguments])
+        ifLevelEnabled( console.warn, 'WARN', [...arguments] )
     },
     info( e ) {
-        ifLevelEnabled(console.info, 'INFO',[...arguments])
+        ifLevelEnabled( console.info, 'INFO', [...arguments] )
     },
-    gne(e) {
-      ifLevelEnabled(console.info,  'GOOD NEWS EVERYONE!', [...arguments])
+    gne( e ) {
+        ifLevelEnabled( console.info, 'GOOD NEWS EVERYONE!', [...arguments] )
     },
     access( e ) {
-        if(serverConfig.current.logAccess) {
-            ifLevelEnabled(console.info, 'ACCESS',[...arguments])
+        if( logAccess ) {
+            ifLevelEnabled( console.info, 'ACCESS', [...arguments] )
         }
     },
     error( e ) {
-        ifLevelEnabled(console.error, 'ERROR',[...arguments].map(arg=> arg.stack ? arg.stack : arg))
+        ifLevelEnabled( console.error, 'ERROR', [...arguments].map( arg => arg.stack ? arg.stack : arg ) )
     }
 }

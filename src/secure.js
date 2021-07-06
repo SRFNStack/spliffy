@@ -1,78 +1,53 @@
 const serverConfig = require( './serverConfig' )
-const http2 = require( 'http2' )
-const http = require( 'http' )
-const PassThrough = require( 'stream' ).PassThrough
 const fs = require( 'fs' )
-const log = require('./log')
-const forge = require('node-forge')
-const dispatcher = require('./dispatcher')
-
-const state = {
-    server: null,
-    port: 14420,
-    keyData: null,
-    certData: null,
-    cn: null,
-    acmeChallengeProvider: null
-}
+const log = require( './log' )
+const path = require( 'path' )
+const uws = require( 'uWebSockets.js' )
 
 const startHttpRedirect = () => {
     //redirect http to https
-    http.createServer(
+    let port = serverConfig.current.port;
+    uws.App().any( "/*",
         ( req, res ) => {
             try {
-                if( req.url.startsWith( '/.well-known/acme-challenge/' ) ) {
-                    const token = req.url.split( '/' ).slice( -1 )[ 0 ]
-                    let challenge = state.acmeChallengeProvider( token )
-                    if( challenge ) {
-                        log.info("Received challenge request. Responding with authorization.")
-                        res.writeHead( 200, { 'Content-Type': 'text/plain; charset=utf-8' } )
-                        new PassThrough().end( Buffer.from( challenge.keyAuthorization, 'utf8' ) ).pipe( res )
-                        return
-                    }
-                }
-                res.writeHead( 301, { 'Location': `https://${req.headers.host || state.cn}:${serverConfig.current.secure.port}${req.url}` } )
+                res.writeHead( 301, { 'Location': `https://${req.headers.host}:${serverConfig.current.port}${req.url}` } )
                 res.end()
-            } catch(e) {
-                log.error( 'Failed to handle http request on port ' + serverConfig.current.port, req.url, e )
+            } catch( e ) {
+                log.error( `Failed to handle http request on port ${serverConfig.current.port}`, req.url, e )
             }
-        } )
-        .listen( serverConfig.current.port )
+        }
+    ).listen( serverConfig.current.host || '0.0.0.0', port, ( token ) => {
+        if( token ) {
+            log.gne( `Http redirect server initialized at ${new Date().toISOString()} and listening on port ${port}` )
+        } else {
+            throw new Error( `Failed to start server on port ${port}` )
+        }
+    } )
 }
 
-let updateIfChanged = ( newKeyData, newCertData ) => {
-    if( !state.keyData || !state.certData || !state.keyData.equals( newKeyData ) || !state.certData.equals( newCertData ) ) {
-        state.keyData = newKeyData
-        state.certData = newCertData
-        const certificate = forge.pki.certificateFromPem( state.certData )
-        state.cn = certificate.subject.getField( 'CN').value
-        let oldServer = state.server
-        state.server = http2.createSecureServer(
-            {
-                key: state.keyData,
-                cert: state.certData
-            },
-            dispatcher
-        )
-        if( oldServer ) {
-            oldServer.close( () => state.server.listen( serverConfig.current.secure.port ) )
-            oldServer = null
+let startServer = () => {
+    const secure = serverConfig.current.secure
+    if( !secure.key || !secure.cert ) throw 'You must supply an secure key and cert!'
+    let keyPath = path.resolve( secure.key )
+    let certPath = path.resolve( secure.cert )
+    if( !fs.existsSync( keyPath ) ) throw `Can't find https key file: ${keyPath}`
+    if( !fs.existsSync( certPath ) ) throw `Can't find https cert file: ${keyPath}`
+    let port = secure.port || 14420;
+    uws.App( {
+        key_file_name: secure.key,
+        cert_file_name: secure.cert
+    } ).listen( serverConfig.current.host || '0.0.0.0', port, ( token ) => {
+        if( token ) {
+            log.gne( `Https server initialized at ${new Date().toISOString()} and listening on port ${port}` )
         } else {
-            state.server.listen( serverConfig.current.secure.port )
+            throw new Error( `Failed to start server on port ${port}` )
         }
-        log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${serverConfig.current.secure.port} and ${serverConfig.current.port}` )
-    }
+    } )
 
 }
 module.exports = {
-    startHttps: ( secure ) => {
-        if( !secure.key || !secure.cert ) throw 'You must supply an secure key and cert!'
-        let keyPath = path.resolve( secure.key )
-        let certPath = path.resolve( secure.cert )
-        if( !fs.existsSync( keyPath ) ) throw `Can't find https key file: ${keyPath}`
-        if( !fs.existsSync( certPath ) ) throw `Can't find https cert file: ${keyPath}`
-        updateIfChanged( fs.readFileSync( keyPath ), fs.readFileSync( certPath ) )
-    },
-    startHttpRedirect,
-    getServer(){return state.server}
+    startHttps: () => {
+        startServer()
+        startHttpRedirect()
+    }
 }

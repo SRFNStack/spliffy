@@ -1,4 +1,3 @@
-const parseUrl = require( './parseUrl' )
 const log = require( './log' )
 const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
@@ -40,7 +39,7 @@ const handle = async ( url, res, req, body, handler, middleware ) => {
                 res
             } )
         if( handled && handled.then && typeof handled.then == 'function' ) {
-            handled.then( ( h ) => finalizeResponse( req, res, h ) )
+            await handled.then( ( h ) => finalizeResponse( req, res, h ) )
                 .catch(
                     e => {
                         let refId = uuid()
@@ -73,14 +72,14 @@ const handleError = ( res, e, refId ) => {
 const end = ( res, code, message, body ) => {
     res.statusCode = code
     res.statusMessage = message
-    res.end( body )
+    res.finalize( body || '' )
 }
 
 const logAccess = function( req, res ) {
     const start = new Date().getTime()
-    res.on( 'close', () => {
-        log.access( req.connection.remoteAddress, res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms' )
-    } )
+    return () => {
+        log.access( req.remoteAddress, res.proxiedRemoteAddress || '', res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms' )
+    }
 }
 
 const finalizeResponse = ( req, res, handled ) => {
@@ -95,17 +94,12 @@ const finalizeResponse = ( req, res, handled ) => {
             if( handled.body || handled.status || handled.statusMessage || handled.statusCode || handled.headers ) {
                 body = handled.body
                 if( handled.headers ) {
-                    Object.entries( handled.headers )
-                        .forEach( ( [k, v] ) => res.setHeader( k, v ) )
+                    res.assignHeaders(handled.headers)
                 }
                 code = handled.statusCode || 200
                 message = handled.statusMessage || 'OK'
             }
-
-            let contentType = res.getHeader( 'content-type' ) || 'application/octet-stream'
-            if( !contentType ) {
-                res.setHeader( 'content-type', contentType )
-            }
+            let contentType = res.getHeader( 'content-type' )
 
             end( res, code, message, content.serialize( body, contentType ) )
         }
@@ -113,25 +107,26 @@ const finalizeResponse = ( req, res, handled ) => {
 }
 
 async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
-    if(!middleware) return
+    if( !middleware ) return
     try {
-        if(e)
+        if( e )
             await executeMiddleware( middleware, req, res, e )
         else
             await executeMiddleware( middleware, req, res )
     } catch( e ) {
-        if(!refId) refId = uuid()
+        if( !refId ) refId = uuid()
         console.log( 'Failed executing middleware while handling error: ' + e )
         handleError( res, e, refId )
     }
 }
 
 const handleRequest = async ( req, res ) => {
-    let url = parseUrl( req.url )
-    req.spliffyUrl = url
-    req = decorateRequest( req )
+    req = decorateRequest( req, res )
     res = decorateResponse( res, req, finalizeResponse )
-    let route = routes.find( url )
+
+    res.setHeader( 'server', 'node' )
+
+    let route = routes.find( req.spliffyUrl )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
         route = routes.find( parseUrl( serverConfig.current.notFoundRoute ) )
     }
@@ -139,20 +134,28 @@ const handleRequest = async ( req, res ) => {
         end( res, 404, 'Not Found' )
     } else if( req.method === 'OPTIONS' || ( route.handler && route.handler[req.method] ) ) {
         try {
-            let reqBody = ''
-            req.on( 'data', data => reqBody += String( data ) )
-            req.on( 'end', async () => {
-                url.pathParameters = route.pathParameters
-                await tryExecuteMiddleware( route.middleware, req, res )
-                if( !res.writableEnded ) {
-                    if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
-                        res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
-                        end( res, 204 )
-                    } else {
-                        await handle( url, res, req, reqBody, route.handler, route.middleware )
-                    }
+            let buffer
+
+            let reqBody = await new Promise(
+                resolve =>
+                    res.onData( async ( data, isLast ) => {
+                        if( isLast ) {
+                            buffer = data.byteLength > 0 ? Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) ) : buffer
+                            resolve( buffer )
+                        }
+                        buffer = Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) )
+                    } )
+            )
+            req.spliffyUrl.pathParameters = route.pathParameters
+            await tryExecuteMiddleware( route.middleware, req, res )
+            if( !res.writableEnded ) {
+                if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
+                    res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
+                    end( res, 204 )
+                } else {
+                    await handle( req.spliffyUrl, res, req, reqBody, route.handler, route.middleware )
                 }
-            } )
+            }
         } catch( e ) {
             let refId = uuid()
             log.error( 'Handling request failed', e, refId )
@@ -166,10 +169,18 @@ const handleRequest = async ( req, res ) => {
 }
 
 module.exports =
-    ( req, res ) => {
+    function( res, req ) {
         try {
-            logAccess( req, res )
-            return handleRequest( req, res )
+            if( serverConfig.current.logAccess ) {
+                let onComplete = logAccess( req, res )
+                handleRequest( req, res )
+                    .then( result => {
+                        onComplete()
+                        return result
+                    } )
+            } else {
+                return handleRequest( req, res )
+            }
         } catch( e ) {
             log.error( 'Failed handling request', e )
         }
