@@ -18,7 +18,8 @@ function toArrayBuffer( buffer ) {
 module.exports = {
     setCookie,
     decorateRequest( req, res ) {
-        req.url = req.getUrl()+"?"+req.getQuery()
+        let query = req.getQuery()
+        req.url = `${req.getUrl()}${query ? '?'+query : ''}`
         req.spliffyUrl = parseUrl( req.getUrl(), req.getQuery() )
         req.headers = {}
         req.method = req.getMethod().toUpperCase()
