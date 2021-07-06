@@ -167,6 +167,8 @@ module.exports = {
         } else {
             for( let i = 1; i <= path.length; i++ ) {
                 if( i === path.length || path[i] === '/' ) {
+                    //trailing or consecutive /
+                    if(buf === '') continue
                     route = getRoute( buf, route, pathParameters )
                     buf = ''
                     if( !route ) {
