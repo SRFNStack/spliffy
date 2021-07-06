@@ -1,7 +1,7 @@
 const serverConfig = require('./serverConfig')
 
 module.exports = (path, query) => {
-    let parsedUrl = { path: path, query: {} }
+    let parsed = { path: path, query: {} }
     if( query ) {
         let nextParam = query.indexOf( '&' )
         let kvs = []
@@ -21,17 +21,17 @@ module.exports = (path, query) => {
                 break
             }
         } while( query.length > 0 )
-        parsedUrl.query = kvs.reduce( ( query, kvPair ) => {
-            if( query[ kvPair[ 0 ] ] ) {
-                if( !Array.isArray( query[ kvPair[ 0 ] ] ) ) {
-                    query[ kvPair[ 0 ] ] = [ query[ kvPair[ 0 ] ] ]
+
+        for(let kvPair of kvs) {
+            if( parsed.query[ kvPair[ 0 ] ] ) {
+                if( !Array.isArray( parsed.query[ kvPair[ 0 ] ] ) ) {
+                    parsed.query[ kvPair[ 0 ] ] = [ parsed.query[ kvPair[ 0 ] ] ]
                 }
-                query[ kvPair[ 0 ] ].push( kvPair[ 1 ] )
+                parsed.query[ kvPair[ 0 ] ].push( kvPair[ 1 ] )
             } else {
-                query[ kvPair[ 0 ] ] = kvPair[ 1 ]
+                parsed.query[ kvPair[ 0 ] ] = kvPair[ 1 ]
             }
-            return query
-        }, {} )
+        }
     }
-    return parsedUrl
+    return parsed
 }

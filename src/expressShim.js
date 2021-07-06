@@ -7,10 +7,6 @@ const setCookie = ( res ) => function() {
 const log = require( './log' )
 const addressArrayBufferToString = addrBuf => String.fromCharCode.apply( null, new Int8Array( addrBuf ) )
 
-function toArrayBuffer( buffer ) {
-    return buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength );
-}
-
 /**
  * Provide a minimal set of shims to make most middleware, like passport, work
  * @type {{decorateResponse(*=, *=, *): *, decorateRequest(*): *}}
@@ -33,7 +29,7 @@ module.exports = {
     },
     decorateResponse( res, req, finalizeResponse ) {
         res.onAborted( () => {
-            log.error( "Request was aborted prematurely" )
+            log.error( `Request to ${req.url} was aborted prematurely` )
         } )
         const writeHead = {}
         res.headers = {}
@@ -46,7 +42,13 @@ module.exports = {
             //When headers have been set with response.setHeader(), they will be merged with any headers passed to response.writeHead(), with the headers passed to response.writeHead() given precedence.
             Object.assign( res.headers, writeHead )
             for(let header of Object.keys( res.headers )){
-                res.writeHeader( header, res.headers[header].toString() )
+                if(Array.isArray(res.headers[header])){
+                    for(let multiple of res.headers[header]){
+                        res.writeHeader( header, multiple.toString() )
+                    }
+                } else {
+                    res.writeHeader( header, res.headers[header].toString() )
+                }
             }
         }
         res.writeHead = ( status, headers ) => {
@@ -69,11 +71,7 @@ module.exports = {
 
         const ogEnd = res.end
 
-        res.end = (body) =>{
-            res.finalize(body)
-        }
-
-        res.finalize = body => {
+        res.end = body => {
             if(res.writableEnded || res.aborted) return
             res.writableEnded = true
             res.aborted = true
@@ -81,6 +79,7 @@ module.exports = {
             res.flushHeaders()
             ogEnd.call(res, body )
         }
+
         res.redirect = function( code, location ) {
             if( arguments.length === 1 ) {
                 location = code
@@ -98,6 +97,7 @@ module.exports = {
         }
         res.json = res.send
         res.setCookie = setCookie( res )
+        res.cookie = res.setCookie
         return res
 
     }

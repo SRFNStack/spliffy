@@ -12,7 +12,7 @@ export default div(
     notFoundRoute: "/404",
     acceptsDefault: "*/*",
     defaultContentType: "*/*",
-    parseCookie: false,
+    parseCookie: true,
     resolveWithoutExtension: ['.js'],
     errorTransformer: ( e, refId ) => e,
     contentHandlers: {

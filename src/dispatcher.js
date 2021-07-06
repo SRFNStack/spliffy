@@ -3,7 +3,6 @@ const serverConfig = require( './serverConfig' )
 const routes = require( './routes' )
 const content = require( './content' )
 const { executeMiddleware } = require( "./middleware" );
-const { setCookie } = require( './expressShim.js' )
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
@@ -31,7 +30,6 @@ const handle = async ( url, res, req, body, handler, middleware ) => {
     try {
         let handled = handler[req.method](
             {
-                setCookie: setCookie( res ),
                 url,
                 body,
                 headers: req.headers,
@@ -72,7 +70,7 @@ const handleError = ( res, e, refId ) => {
 const end = ( res, code, message, body ) => {
     res.statusCode = code
     res.statusMessage = message
-    res.finalize( body || '' )
+    res.end( body || '' )
 }
 
 const logAccess = function( req, res ) {

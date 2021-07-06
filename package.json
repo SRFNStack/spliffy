@@ -26,8 +26,6 @@
   "dependencies": {
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
-    "greenlock-express": "^4.0.3",
-    "node-forge": "^0.10.0",
     "uWebSockets.js": "uNetworking/uWebSockets.js#v19.3.0",
     "uuid": "^3.3.3"
   },

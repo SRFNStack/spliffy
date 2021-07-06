@@ -34,6 +34,10 @@ module.exports = {
             current.decodePathParameters = true
         }
 
+        if( !config.hasOwnProperty( 'parseCookie' ) ) {
+            current.parseCookie = true
+        }
+
         current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
         current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 
