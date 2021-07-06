@@ -92,7 +92,7 @@ const finalizeResponse = ( req, res, handled ) => {
             if( handled.body || handled.status || handled.statusMessage || handled.statusCode || handled.headers ) {
                 body = handled.body
                 if( handled.headers ) {
-                    res.assignHeaders(handled.headers)
+                    res.assignHeaders( handled.headers )
                 }
                 code = handled.statusCode || 200
                 message = handled.statusMessage || 'OK'
@@ -101,6 +101,8 @@ const finalizeResponse = ( req, res, handled ) => {
 
             end( res, code, message, content.serialize( body, contentType ) )
         }
+    } else {
+        log.warn( `Tried to finalize ended response for req: ${req.url}` )
     }
 }
 
@@ -170,15 +172,9 @@ module.exports =
     function( res, req ) {
         try {
             if( serverConfig.current.logAccess ) {
-                let onComplete = logAccess( req, res )
-                handleRequest( req, res )
-                    .then( result => {
-                        onComplete()
-                        return result
-                    } )
-            } else {
-                return handleRequest( req, res )
+                res.onEnd = logAccess( req, res )
             }
+            handleRequest( req, res )
         } catch( e ) {
             log.error( 'Failed handling request', e )
         }

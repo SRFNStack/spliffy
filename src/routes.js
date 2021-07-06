@@ -130,6 +130,14 @@ const init = async () => {
     }
 
 }
+const getRoute = ( part, route, pathParameters ) => {
+    if( part in route ) {
+        return route[part]
+    } else if( route.variable ) {
+        pathParameters[route.variable.key] = serverConfig.current.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
+        return route.variable || {}
+    }
+}
 
 module.exports = {
     init,
@@ -142,38 +150,36 @@ module.exports = {
      */
     find: ( url ) => {
         let prefix = serverConfig.current.routePrefix
-        if( prefix && !url.path.startsWith( '/' + prefix ) ) {
-            return {}
-        }
-        let path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
-        if( path === '' || path === '/' ) {
-            path = 'index'
-        }
-        let nextPart = path.indexOf( '/' )
-        let route = state.routes
-        let pathParameters = {}
-        do {
-            let part = nextPart > -1 ? path.substr( 0, nextPart ) : path
-            if( part in route ) {
-                route = route[part]
-            } else if( route.variable ) {
-                pathParameters[route.variable.key] = serverConfig.current.decodePathParameters ? decodeURIComponent( part.replace( /\+/g, '%20' ) ) : part
-                route = route.variable || {}
-            } else {
-                route = {}
-                break
+        let path = url.path
+        if( prefix ) {
+            if( !url.path.startsWith( '/' + prefix ) ) {
+                return {}
             }
+            path = url.path.substr( 1 + ( prefix && prefix.length + 1 || 0 ) )
+        }
 
-            if( nextPart > -1 && ( route && !route.catchall ) ) {
-                path = path.substr( nextPart + 1 )
-                nextPart = path.indexOf( '/' )
-                if( nextPart === -1 ) {
-                    nextPart = path.indexOf( '.' ) > -1 ? nextPart.length : -1
+        let route = state.routes
+        let buf = ''
+        let pathParameters = {}
+
+        if( path === '' || path === '/' ) {
+            route = getRoute( 'index', route, pathParameters ) || {}
+        } else {
+            for( let i = 1; i <= path.length; i++ ) {
+                if( i === path.length || path[i] === '/' ) {
+                    route = getRoute( buf, route, pathParameters )
+                    buf = ''
+                    if( !route ) {
+                        route = {}
+                        break
+                    } else if( route.catchall ) {
+                        break
+                    }
+                } else {
+                    buf += path[i]
                 }
-            } else {
-                break
             }
-        } while( path.length > 0 )
+        }
         return {
             handler: route && ( route.handler || ( route.index && route.index.handler ) ),
             pathParameters: pathParameters,

@@ -15,7 +15,7 @@ module.exports = {
     setCookie,
     decorateRequest( req, res ) {
         let query = req.getQuery()
-        req.url = `${req.getUrl()}${query ? '?'+query : ''}`
+        req.url = `${req.getUrl()}${query ? '?' + query : ''}`
         req.spliffyUrl = parseUrl( req.getUrl(), req.getQuery() )
         req.headers = {}
         req.method = req.getMethod().toUpperCase()
@@ -32,18 +32,21 @@ module.exports = {
             log.error( `Request to ${req.url} was aborted prematurely` )
         } )
         const writeHead = {}
+
         res.headers = {}
+        res.headersSent = false
         res.setHeader = ( header, value ) => {
             res.headers[header.toLowerCase()] = value
         }
         res.removeHeader = header => delete res.headers[header.toLowerCase()]
         res.flushHeaders = () => {
+            res.headersSent = true
             // https://nodejs.org/api/http.html#http_response_writehead_statuscode_statusmessage_headers
             //When headers have been set with response.setHeader(), they will be merged with any headers passed to response.writeHead(), with the headers passed to response.writeHead() given precedence.
             Object.assign( res.headers, writeHead )
-            for(let header of Object.keys( res.headers )){
-                if(Array.isArray(res.headers[header])){
-                    for(let multiple of res.headers[header]){
+            for( let header of Object.keys( res.headers ) ) {
+                if( Array.isArray( res.headers[header] ) ) {
+                    for( let multiple of res.headers[header] ) {
                         res.writeHeader( header, multiple.toString() )
                     }
                 } else {
@@ -70,14 +73,16 @@ module.exports = {
         }
 
         const ogEnd = res.end
-
         res.end = body => {
-            if(res.writableEnded || res.aborted) return
+            if( res.writableEnded || res.aborted ) return
             res.writableEnded = true
             res.aborted = true
             res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
             res.flushHeaders()
-            ogEnd.call(res, body )
+            ogEnd.call( res, body )
+            if(typeof res.onEnd === 'function'){
+                res.onEnd()
+            }
         }
 
         res.redirect = function( code, location ) {

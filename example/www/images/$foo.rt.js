@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ({url})=>url.path
+    GET: ({url})=>`got parameter ${url.pathParameters.foo}`
 }
