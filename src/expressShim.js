@@ -1,11 +1,15 @@
 const cookie = require( 'cookie' )
 const serverConfig = require( './serverConfig' )
+const http = require('http')
 const parseUrl = require( './parseUrl' )
 const setCookie = ( res ) => function() {
     return res.setHeader( 'set-cookie', [...( res.getHeader( 'set-cookie' ) || [] ), cookie.serialize( ...arguments )] )
 }
 const log = require( './log' )
 const addressArrayBufferToString = addrBuf => String.fromCharCode.apply( null, new Int8Array( addrBuf ) )
+const excludedMessageProps = {
+    setTimeout: true, _read: true, destroy: true, _addHeaderLines: true, _addHeaderLine: true, _dump: true, __proto__: true
+}
 
 /**
  * Provide a minimal set of shims to make most middleware, like passport, work
@@ -24,6 +28,10 @@ module.exports = {
         req.forEach( ( header, value ) => req.headers[header] = value )
         if( serverConfig.current.parseCookie ) {
             req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
+        }
+        //frameworks like passport like to modify the message prototype...
+        for(let p of Object.keys(http.IncomingMessage.prototype)){
+            if(!req[p] && !excludedMessageProps[p]) req[p] = http.IncomingMessage.prototype[p]
         }
         return req
     },

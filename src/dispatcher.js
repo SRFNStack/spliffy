@@ -100,7 +100,11 @@ const finalizeResponse = ( req, res, handled ) => {
             }
             let contentType = res.getHeader( 'content-type' )
 
-            end( res, code, message, content.serialize( body, contentType ) )
+            let serialized = content.serialize( body, contentType );
+            if(serialized && serialized.contentType && !contentType) {
+                res.setHeader('content-type', serialized.contentType)
+            }
+            end( res, code, message, serialized && serialized.data || serialized )
         }
     } else {
         log.warn( `Tried to finalize ended response for req: ${req.url}` )

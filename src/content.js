@@ -10,7 +10,10 @@ let defaultHandler = {
         if( o instanceof Buffer || typeof o === 'string' ) {
             return o
         }
-        return JSON.stringify( typeof o === 'object' ? o : o && o.toString() )
+        return {
+            contentType: 'application/json',
+            data: JSON.stringify( typeof o === 'object' ? o : o && o.toString() )
+        }
     }
 };
 const contentHandlers = {
