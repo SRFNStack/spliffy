@@ -6,6 +6,7 @@ const { executeMiddleware } = require( "./middleware" );
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
+const parseUrl = require('./parseUrl')
 const uuid = require( 'uuid' ).v4
 
 /**
@@ -128,7 +129,7 @@ const handleRequest = async ( req, res ) => {
 
     let route = routes.find( req.spliffyUrl )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
-        route = routes.find( parseUrl( serverConfig.current.notFoundRoute ) )
+        route = routes.find( parseUrl( ...serverConfig.current.notFoundRoute.split('?') ) )
     }
     if( !route.handler ) {
         end( res, 404, 'Not Found' )
