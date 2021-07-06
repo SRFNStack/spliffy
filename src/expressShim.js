@@ -73,13 +73,16 @@ module.exports = {
         }
 
         const ogEnd = res.end
+        res.ended = false
         res.end = body => {
-            if( res.writableEnded || res.aborted ) return
-            res.writableEnded = true
-            res.aborted = true
-            res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
-            res.flushHeaders()
-            ogEnd.call( res, body )
+            if( res.ended ) return
+            res.ended = true
+            if(!res.writableEnded){
+                res.writableEnded = true
+                res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
+                res.flushHeaders()
+                ogEnd.call( res, body )
+            }
             if(typeof res.onEnd === 'function'){
                 res.onEnd()
             }

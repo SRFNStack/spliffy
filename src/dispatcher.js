@@ -82,7 +82,7 @@ const logAccess = function( req, res ) {
 }
 
 const finalizeResponse = ( req, res, handled ) => {
-    if( !res.writableEnded ) {
+    if( !res.ended ) {
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, 200, 'OK' )
