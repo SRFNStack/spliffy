@@ -7,7 +7,7 @@ let defaultHandler = {
         }
     },
     serialize: o => {
-        if(o instanceof Buffer || typeof o === 'string'){
+        if( o instanceof Buffer || typeof o === 'string' ) {
             return o
         }
         return JSON.stringify( typeof o === 'object' ? o : o && o.toString() )
@@ -27,10 +27,7 @@ let _acceptsDefault = '*/*'
 function getHandler( contentType ) {
     //content-type should be singular https://greenbytes.de/tech/webdav/rfc2616.html#rfc.section.14.17
     let handler = contentHandlers[contentType];
-    if( contentType
-        && handler
-        && typeof handler
-    ) {
+    if( handler && typeof handler ) {
         if( typeof handler.serialize !== 'function' ) {
             throw new Error( `Content handlers must provide a serialize function. ${handler}` )
         }
