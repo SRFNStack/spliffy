@@ -17,7 +17,7 @@ module.exports = {
     async addNodeModuleRoutes( routes ) {
         let nodeModuleRoutes = serverConfig.current.nodeModuleRoutes;
         if( nodeModuleRoutes && typeof nodeModuleRoutes === 'object' ) {
-            const nodeModulesDir = path.resolve( nodeModuleRoutes.nodeModulesPath ) || path.resolve( serverConfig.current.routeDir, '..', 'node_modules' )
+            const nodeModulesDir = nodeModuleRoutes.nodeModulesPath ? path.resolve( nodeModuleRoutes.nodeModulesPath ) : path.resolve( serverConfig.current.routeDir, '..', 'node_modules' )
             if( !fs.existsSync( nodeModulesDir ) ) {
                 throw new Error( `Unable to find node_modules dir at ${nodeModulesDir}` )
             }
