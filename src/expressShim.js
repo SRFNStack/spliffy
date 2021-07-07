@@ -26,8 +26,8 @@ module.exports = {
         req.remoteAddress = addressArrayBufferToString( res.getRemoteAddressAsText() )
         req.proxiedRemoteAddress = addressArrayBufferToString( res.getProxiedRemoteAddressAsText() ) || undefined
         req.forEach( ( header, value ) => req.headers[header] = value )
-        if( serverConfig.current.parseCookie ) {
-            req.cookies = req.headers.cookie && cookie.parse( req.headers.cookie ) || {}
+        if( serverConfig.current.parseCookie && req.headers.cookie ) {
+            req.cookies = cookie.parse( req.headers.cookie ) || {}
         }
         //frameworks like passport like to modify the message prototype...
         for(let p of Object.keys(http.IncomingMessage.prototype)){
