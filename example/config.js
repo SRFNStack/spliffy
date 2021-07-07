@@ -6,7 +6,7 @@ module.exports = ( ) =>
         staticContentTypes: {
             '.spliff': 'image/png'
         },
-        // decodeQueryParameters: true,
+        decodeQueryParameters: true,
         middleware: [
             ( req, res, next ) => {
                 console.log( "Look at me! I'm in the middle!" )

@@ -1,36 +1,42 @@
-const serverConfig = require('./serverConfig')
+const serverConfig = require( './serverConfig' )
 
-module.exports = (path, query) => {
+module.exports = ( path, query ) => {
     let parsed = { path: path, query: {} }
     if( query ) {
-        let nextParam = query.indexOf( '&' )
-        let kvs = []
-        do {
-            let eq = query.indexOf( '=' )
-            let paramValue = query.substr( eq + 1, nextParam > -1 ? nextParam - eq - 1 : undefined )
-            let paramKey = query.substr( 0, eq )
-            if( serverConfig.current.decodeQueryParameters ) {
-                [ paramValue, paramKey ] = [ paramValue, paramKey ]
-                    .map( component => decodeURIComponent( component.replace( /\+/g, '%20' ) ) )
-            }
-            kvs.push( [ paramKey, paramValue ] )
-            if( nextParam > -1 ) {
-                query = query.substr( nextParam + 1 )
-                nextParam = query.indexOf( '&' )
-            } else {
-                break
-            }
-        } while( query.length > 0 )
+        if( serverConfig.current.decodeQueryParameters ) {
+            query = decodeURIComponent( query.replace( /\+/g, '%20' ) )
+        }
+        let key = ''
+        let value = ''
+        let isKey = true
 
-        for(let kvPair of kvs) {
-            if( parsed.query[ kvPair[ 0 ] ] ) {
-                if( !Array.isArray( parsed.query[ kvPair[ 0 ] ] ) ) {
-                    parsed.query[ kvPair[ 0 ] ] = [ parsed.query[ kvPair[ 0 ] ] ]
+        for( let i = 0; i <= query.length; i++ ) {
+            if( i === query.length || query[i] === '&' ) {
+                //trailing or consecutive &
+                if( key === '' && value === '' ) continue
+
+                if( parsed.query[key] ) {
+                    if( !Array.isArray( parsed.query[key] ) ) {
+                        parsed.query[key] = [parsed.query[key]]
+                    }
+                    parsed.query[key].push( value )
+                } else {
+                    parsed.query[key] = value
                 }
-                parsed.query[ kvPair[ 0 ] ].push( kvPair[ 1 ] )
+
+                key = ''
+                value = ''
+                isKey = true
+            } else if( query[i] === '=' ) {
+                isKey = false
             } else {
-                parsed.query[ kvPair[ 0 ] ] = kvPair[ 1 ]
+                if( isKey ) {
+                    key += query[i]
+                } else {
+                    value += query[i]
+                }
             }
+
         }
     }
     return parsed
