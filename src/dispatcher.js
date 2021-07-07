@@ -6,7 +6,7 @@ const { executeMiddleware } = require( "./middleware" );
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const { HTTP_METHODS } = require( './routes.js' )
-const parseUrl = require('./parseUrl')
+const parseUrl = require( './parseUrl' )
 const uuid = require( 'uuid' ).v4
 
 /**
@@ -101,8 +101,8 @@ const finalizeResponse = ( req, res, handled ) => {
             let contentType = res.getHeader( 'content-type' )
 
             let serialized = content.serialize( body, contentType );
-            if(serialized && serialized.contentType && !contentType) {
-                res.setHeader('content-type', serialized.contentType)
+            if( serialized && serialized.contentType && !contentType ) {
+                res.setHeader( 'content-type', serialized.contentType )
             }
             end( res, code, message, serialized && serialized.data || serialized )
         }
@@ -125,15 +125,19 @@ async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
     }
 }
 
+let currentDate = new Date().toUTCString()
+setInterval( () => currentDate = new Date().toUTCString(), 1000 )
+
 const handleRequest = async ( req, res ) => {
     req = decorateRequest( req, res )
     res = decorateResponse( res, req, finalizeResponse )
 
-    res.setHeader( 'server', 'node' )
+    res.setHeader( 'server', 'uws' )
+    res.setHeader( 'date', currentDate )
 
     let route = routes.find( req.spliffyUrl )
     if( !route.handler && serverConfig.current.notFoundRoute ) {
-        route = routes.find( parseUrl( ...serverConfig.current.notFoundRoute.split('?') ) )
+        route = routes.find( parseUrl( ...serverConfig.current.notFoundRoute.split( '?' ) ) )
     }
     if( !route.handler ) {
         end( res, 404, 'Not Found' )
