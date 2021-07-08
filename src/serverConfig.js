@@ -18,14 +18,14 @@ const nonsense = [
     'Where are my pants?',
     'Somebody, anyone, help!',
     'What was I doing again?',
-    'Wait, I swear, I didn\'t...',
+    'Burninating the codeessss',
     'Leeeeerrrooooyyy Jeeenkins',
     'At least I have chicken'
 ]
 
 module.exports = {
     current,
-    randomNonsense: () => `~[CRASH]{${nonsense[Math.floor( Math.random() * nonsense.length )]}}~`,
+    randomNonsense: () => `~[OHNO]{${nonsense[Math.floor( Math.random() * nonsense.length )]}}~`,
     init( config ) {
         Object.assign( current, config )
 
