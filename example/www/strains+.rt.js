@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ({url}) => url
+    GET: ({url}) => ({body: url, headers: {'Content-type': 'potato'}})
 }

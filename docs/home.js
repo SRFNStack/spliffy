@@ -7,7 +7,7 @@ export default div( { class: 'flex-center', style: 'flex-direction: column; font
     p( 'Create a directory for your app' ),
     p( prismCode( 'mkdir -p ~/app/www' ) ),
     p( 'Install spliffy' ),
-    p( prismCode( 'cd ~/app && npm install spliffy' ) ),
+    p( prismCode( 'cd ~/app && npm install @srfnstack/spliffy' ) ),
     p( 'Create a handler for the desired route name (a regular js file with the suffix .rt.js) ' ),
     p( prismCode( 'vi ~/app/www/spliffy.rt.js' ) ),
     prismCode( `
