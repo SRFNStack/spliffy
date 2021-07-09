@@ -1,3 +1,4 @@
+const contentTypes = require( './content-types.js' )
 let defaultHandler = {
     deserialize: o => {
         try {
@@ -42,6 +43,13 @@ function getHandler( contentType ) {
     return contentHandlers[_acceptsDefault]
 }
 
+function getContentTypeByExtension( name, staticContentTypes ) {
+    const extension = name.indexOf( '.' ) > -1 ? name.slice( name.lastIndexOf( '.' ) ).toLowerCase() : 'default'
+    let contentType = staticContentTypes && staticContentTypes[extension] || null
+
+    return contentType ? contentType : contentTypes[extension]
+}
+
 module.exports = {
     serialize( content, contentType ) {
         return getHandler( contentType ).serialize( content )
@@ -52,5 +60,6 @@ module.exports = {
     initContentHandlers( handlers, acceptsDefault ) {
         Object.assign( handlers, contentHandlers )
         _acceptsDefault = acceptsDefault
-    }
+    },
+    getContentTypeByExtension
 }

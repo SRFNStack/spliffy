@@ -2,8 +2,8 @@ const fs = require( 'fs' )
 const path = require( 'path' )
 const serverConfig = require( './serverConfig' )
 const { mergeMiddleware } = require( "./middleware" );
-const { addStaticRoute } = require( "./routeUtil" );
-
+const staticHandler = require( './staticHandler' )
+const { getContentTypeByExtension } = require( './content' )
 
 const stripLeadingSlash = p => p.startsWith( '/' ) ? p.substr( 1 ) : p
 
@@ -14,8 +14,9 @@ module.exports = {
      Generating the list of files using pattern matching yourself is highly discouraged.
      It is much safer to explicitly list every file you wish to be served so you don't inadvertently serve additional files.
      */
-    async addNodeModuleRoutes( routes ) {
+    getNodeModuleRoutes() {
         let nodeModuleRoutes = serverConfig.current.nodeModuleRoutes;
+        let routes = []
         if( nodeModuleRoutes && typeof nodeModuleRoutes === 'object' ) {
             const nodeModulesDir = nodeModuleRoutes.nodeModulesPath ? path.resolve( nodeModuleRoutes.nodeModulesPath ) : path.resolve( serverConfig.current.routeDir, '..', 'node_modules' )
             if( !fs.existsSync( nodeModulesDir ) ) {
@@ -40,15 +41,21 @@ module.exports = {
                 if( fs.existsSync( filePath ) ) {
                     let parts = urlPath.split( '/' )
                     let lastPart = parts.pop()
-                    let parent = parts.reduce( ( rts, part ) => rts[part] || ( rts[part] = {} ), routes )
                     let mw = {}
                     mergeMiddleware( serverConfig.current.middleware, mw )
                     mergeMiddleware( nodeModuleRoutes.middleware || {}, mw )
-                    await addStaticRoute( parent, { name: lastPart }, filePath, mw )
+                    routes.push( {
+                        pathParams: [],
+                        urlPath,
+                        filePath,
+                        handlers: staticHandler.create( path, getContentTypeByExtension(lastPart, serverConfig.current.staticContentTypes) ),
+                        middleware: mw
+                    } )
                 } else {
                     console.warn( `The specified node_modules file: ${file} does not exist and will not be served.` )
                 }
             }
         }
+        return routes
     }
 }

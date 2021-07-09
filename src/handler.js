@@ -1,12 +1,9 @@
 const log = require( './log' )
 const serverConfig = require( './serverConfig' )
-const routes = require( './routes' )
 const content = require( './content' )
 const { executeMiddleware } = require( "./middleware" );
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
-const { HTTP_METHODS } = require( './routes.js' )
-const parseUrl = require( './parseUrl' )
 const uuid = require( 'uuid' ).v4
 
 /**
@@ -29,7 +26,7 @@ const handle = async ( url, res, req, body, handler, middleware ) => {
     }
 
     try {
-        let handled = handler[req.method](
+        let handled = handler(
             {
                 url,
                 body,
@@ -82,7 +79,8 @@ const logAccess = function( req, res ) {
 }
 
 const finalizeResponse = ( req, res, handled ) => {
-    if( !res.ended ) {
+    if( !res.finalized ) {
+        res.finalized = true
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, 200, 'OK' )
@@ -128,63 +126,52 @@ async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
 let currentDate = new Date().toUTCString()
 setInterval( () => currentDate = new Date().toUTCString(), 1000 )
 
-const handleRequest = async ( req, res ) => {
+const handleRequest = async ( req, res, handler, middleware, pathParameters ) => {
     req = decorateRequest( req, res )
     res = decorateResponse( res, req, finalizeResponse )
 
     res.setHeader( 'server', 'uws' )
     res.setHeader( 'date', currentDate )
-
-    let route = routes.find( req.spliffyUrl )
-    if( !route.handler && serverConfig.current.notFoundRoute ) {
-        route = routes.find( parseUrl( ...serverConfig.current.notFoundRoute.split( '?' ) ) )
-    }
-    if( !route.handler ) {
-        end( res, 404, 'Not Found' )
-    } else if( req.method === 'OPTIONS' || ( route.handler && route.handler[req.method] ) ) {
-        try {
-            let buffer
-
-            let reqBody = await new Promise(
-                resolve =>
-                    res.onData( async ( data, isLast ) => {
-                        if( isLast ) {
-                            buffer = data.byteLength > 0 ? Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) ) : buffer
-                            resolve( buffer )
-                        }
-                        buffer = Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) )
-                    } )
-            )
-            req.spliffyUrl.pathParameters = route.pathParameters
-            await tryExecuteMiddleware( route.middleware, req, res )
-            if( !res.writableEnded ) {
-                if( req.method === 'OPTIONS' && !route.handler.OPTIONS ) {
-                    res.setHeader( 'Allow', Object.keys( route.handler ).filter( key => HTTP_METHODS.indexOf( key ) > -1 ).join( ', ' ) )
-                    end( res, 204 )
-                } else {
-                    await handle( req.spliffyUrl, res, req, reqBody, route.handler, route.middleware )
-                }
-            }
-        } catch( e ) {
-            let refId = uuid()
-            log.error( 'Handling request failed', e, refId )
-            await tryExecuteMiddleware( route.middleware, req, res, e, refId );
-            if( !res.writableEnded )
-                handleError( res, e, refId )
+    try {
+        let buffer
+        let reqBody = await new Promise(
+            resolve =>
+                res.onData( async ( data, isLast ) => {
+                    if( isLast ) {
+                        buffer = data.byteLength > 0 ? Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) ) : buffer
+                        resolve( buffer )
+                    }
+                    buffer = Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) )
+                } )
+        )
+        req.spliffyUrl.pathParameters = {}
+        for(let i in pathParameters) {
+            req.spliffyUrl.pathParameters[pathParameters[i]] = req.getParameter(i)
         }
-    } else {
-        end( res, 405, 'Method Not Allowed' )
+        await tryExecuteMiddleware( middleware, req, res )
+        if( !res.writableEnded ) {
+            await handle( req.spliffyUrl, res, req, reqBody, handler, middleware )
+        }
+    } catch( e ) {
+        let refId = uuid()
+        log.error( 'Handling request failed', e, refId )
+        await tryExecuteMiddleware( middleware, req, res, e, refId );
+        if( !res.writableEnded )
+            handleError( res, e, refId )
     }
 }
-
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
 module.exports =
-    function( res, req ) {
-        try {
-            if( serverConfig.current.logAccess ) {
-                res.onEnd = logAccess( req, res )
+    {
+        create: ( handler, middleware, pathParameters ) => function( res, req ) {
+            try {
+                if( serverConfig.current.logAccess ) {
+                    res.onEnd = logAccess( req, res )
+                }
+                handleRequest( req, res, handler, middleware, pathParameters )
+            } catch( e ) {
+                log.error( 'Failed handling request', e )
             }
-            handleRequest( req, res )
-        } catch( e ) {
-            log.error( 'Failed handling request', e )
-        }
+        },
+        HTTP_METHODS
     }

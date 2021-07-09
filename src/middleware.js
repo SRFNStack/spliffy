@@ -1,5 +1,4 @@
 const log = require( './log' )
-const uuid = require( 'uuid' ).v4
 /**
  * middleware is stored as an object where the properties are request methods the middleware applies to
  * if a middleware applies to all methods, the property ALL is used

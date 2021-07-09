@@ -80,7 +80,7 @@ async function streamFile( res, fullPath, stat ) {
 }
 
 module.exports = {
-    create: async ( fullPath, contentType ) => {
+    create: ( fullPath, contentType ) => {
         const cache = {}
 
         return {
