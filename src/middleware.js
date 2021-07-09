@@ -62,11 +62,7 @@ const validateMiddlewareArray = ( arr ) => {
     }
 }
 
-async function executeMiddleware( middlewarez, req, res, reqErr ) {
-
-    const applicableMiddleware = ( middlewarez.ALL || [] ).concat( middlewarez[req.method] || [] )
-    const errorMiddleware = applicableMiddleware.filter( mw => mw.length === 4 )
-    const normalMiddleware = applicableMiddleware.filter( mw => mw.length === 3 )
+async function executeMiddleware( middleware, errorMiddleware, req, res, reqErr ) {
     let err
     await new Promise( ( resolve, reject ) => {
         let current = -1
@@ -82,14 +78,14 @@ async function executeMiddleware( middlewarez, req, res, reqErr ) {
             }
             current++
             if( ( isError && current === errorMiddleware.length ) ||
-                ( !isError && current === normalMiddleware.length )
+                ( !isError && current === middleware.length )
             ) {
                 if( mwErr )
                     reject( mwErr )
                 resolve()
             } else {
                 try {
-                    let mw = isError ? errorMiddleware[current] : normalMiddleware[current]
+                    let mw = isError ? errorMiddleware[current] : middleware[current]
                     if( mwErr ) {
                         mw( mwErr, req, res, next )
                     } else {

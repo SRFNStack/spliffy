@@ -45,7 +45,7 @@ module.exports = {
                     mergeMiddleware( serverConfig.current.middleware, mw )
                     mergeMiddleware( nodeModuleRoutes.middleware || {}, mw )
                     routes.push( {
-                        pathParams: [],
+                        pathParameters: [],
                         urlPath,
                         filePath,
                         handlers: staticHandler.create( path, getContentTypeByExtension(lastPart, serverConfig.current.staticContentTypes) ),

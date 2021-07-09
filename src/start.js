@@ -1,6 +1,6 @@
 const serverConfig = require( './serverConfig' )
 const log = require( './log' )
-
+const server = require('./server')
 const { randomNonsense } = require( "./serverConfig" );
 
 module.exports = async function( config ) {
@@ -8,17 +8,15 @@ module.exports = async function( config ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
     }
     log.gne( 'Starting Spliffy!' )
-    serverConfig.init( config )
-    const server = require( './server' ).create()
-
     process
         .on( 'unhandledRejection', ( reason, p ) => {
             log.error( randomNonsense(), reason, 'Unhandled Rejection at Promise', p )
         } )
         .on( 'uncaughtException', ( err, origin ) => {
-            log.error( randomNonsense(), `Caught exception: ${err}\n` +
+            log.error( randomNonsense(), `Caught unhandled exception: ${err}\n` +
                 `Exception origin: ${origin}` )
         } )
 
+    serverConfig.init( config )
     server.start()
 }

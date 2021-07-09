@@ -27,7 +27,7 @@ const startHttpRedirect = () => {
 
 let getHttpsApp = () => {
     const secure = serverConfig.current.secure
-    if( !secure.key || !secure.cert ) throw 'You must supply an secure key and cert!'
+    if( !secure || !secure.key || !secure.cert ) throw 'You must set secure.key and secure.cert in the config to use https!'
     let keyPath = path.resolve( secure.key )
     let certPath = path.resolve( secure.cert )
     if( !fs.existsSync( keyPath ) ) throw `Can't find https key file: ${keyPath}`

@@ -9,19 +9,23 @@ const { HTTP_METHODS } = require( './handler' )
 const isVariable = part => part.startsWith( '$' )
 const getVariableName = part => part.substr( 1 )
 const getPathPart = name => {
-    if( name.startsWith( '$' ) ) {
+    if(name === 'index'){
+        return ''
+    } if( name.startsWith( '$' ) ) {
         return `:${name.substr( 1 )}`
     } else if( name.endsWith( '+' ) ) {
-        return `${name.substr( 0, name.length - 1 )}*`
+        return `${name.substr( 0, name.length - 1 )}/*`
     } else {
         return name
     }
 }
-const doFindRoutes = ( currentFile, filePath, urlPath, pathParams, inheritedMiddleware ) => {
+const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inheritedMiddleware ) => {
     let routes = []
     let name = currentFile.name;
     if( currentFile.isDirectory() ) {
-
+        if( isVariable( name ) ) {
+            pathParameters = pathParameters.concat( getVariableName( name ) )
+        }
         const files = fs.readdirSync( filePath, { withFileTypes: true } )
 
         const dirMiddleware = files
@@ -44,7 +48,7 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParams, inheritedMidd
                             f,
                             filePath + '/' + f.name,
                             urlPath + '/' + getPathPart( name ),
-                            pathParams,
+                            pathParameters,
                             dirMiddleware
                         )
                     )
@@ -53,10 +57,10 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParams, inheritedMidd
     } else if( !serverConfig.current.staticMode && name.endsWith( '.rt.js' ) ) {
         name = name.substr( 0, name.length - '.rt.js'.length )
         if( isVariable( name ) ) {
-            pathParams = pathParams.concat( getVariableName( name ) )
+            pathParameters = pathParameters.concat( getVariableName( name ) )
         }
         let route = {
-            pathParams,
+            pathParameters,
             urlPath: `${urlPath}/${getPathPart( name )}`,
             filePath,
             handlers: {}
@@ -76,11 +80,11 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParams, inheritedMidd
         routes.push( route )
     } else {
         if( isVariable( name ) ) {
-            pathParams = pathParams.concat( getVariableName( name ) )
+            pathParameters = pathParameters.concat( getVariableName( name ) )
         }
         let contentType = getContentTypeByExtension( name, serverConfig.current.staticContentTypes )
         let route = {
-            pathParams,
+            pathParameters,
             urlPath: `${urlPath}/${getPathPart( name )}`,
             filePath,
             handlers: staticHandler.create( filePath, contentType ),

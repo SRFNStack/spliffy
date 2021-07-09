@@ -5,17 +5,18 @@ const { executeMiddleware } = require( "./middleware" );
 const { decorateResponse } = require( './expressShim.js' )
 const { decorateRequest } = require( './expressShim.js' )
 const uuid = require( 'uuid' ).v4
+const { Readable } = require( 'stream' )
 
 /**
- * Actually handle an incoming request
+ * Execute the handler
  * @param url The url being requested
- * @param res The node response object
- * @param req The node request object
+ * @param res The uws response object
+ * @param req The uws request object
  * @param body The request body
- * @param handler The handler for the route
+ * @param handler The handler function for the route
  * @param middleware The middleware that applies to this request
  */
-const handle = async ( url, res, req, body, handler, middleware ) => {
+const executeHandler = async ( url, res, req, body, handler, middleware ) => {
     try {
         if( body )
             body = content.deserialize( body, req.headers['content-type'] )
@@ -34,13 +35,13 @@ const handle = async ( url, res, req, body, handler, middleware ) => {
                 req,
                 res
             } )
-        if( handled && handled.then && typeof handled.then == 'function' ) {
+        if( handled && typeof handled.then == 'function' ) {
             await handled.then( ( h ) => finalizeResponse( req, res, h ) )
                 .catch(
                     e => {
                         let refId = uuid()
-                        log.error( e, refId )
-                        handleError( res, e, refId )
+                        log.error( 'handler failed', e, refId )
+                        endError( res, e, refId )
                     }
                 )
         } else {
@@ -51,11 +52,11 @@ const handle = async ( url, res, req, body, handler, middleware ) => {
         let refId = uuid()
         log.error( 'handler failed', e, refId )
         await tryExecuteMiddleware( middleware, req, res, e, refId )
-        handleError( res, e, refId )
+        endError( res, e, refId )
     }
 }
 
-const handleError = ( res, e, refId ) => {
+const endError = ( res, e, refId ) => {
     if( e.body && typeof e.body !== 'string' ) {
         e.body = JSON.stringify( e.body )
     }
@@ -66,9 +67,13 @@ const handleError = ( res, e, refId ) => {
 }
 
 const end = ( res, code, message, body ) => {
-    res.statusCode = code
-    res.statusMessage = message
-    res.end( body || '' )
+    if( !res.statusCode ) res.statusCode = code
+    if( !res.statusMessage ) res.statusMessage = message
+    if( body instanceof Readable ) {
+        streamResponse( res, body )
+    } else {
+        res.end( serializeBody( body, res ) || '' )
+    }
 }
 
 const logAccess = function( req, res ) {
@@ -85,41 +90,114 @@ const finalizeResponse = ( req, res, handled ) => {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, 200, 'OK' )
         } else {
-            let code = 200
-            let message = 'OK'
-            let body = handled
             if( handled.body || handled.status || handled.statusMessage || handled.statusCode || handled.headers ) {
-                body = handled.body
                 if( handled.headers ) {
                     res.assignHeaders( handled.headers )
                 }
-                code = handled.statusCode || 200
-                message = handled.statusMessage || 'OK'
+                end( res, handled.statusCode || 200, handled.statusMessage || 'OK', handled.body )
+            } else {
+                end( res, 200, 'OK', handled )
             }
-            let contentType = res.getHeader( 'content-type' )
-
-            let serialized = content.serialize( body, contentType );
-            if( serialized && serialized.contentType && !contentType ) {
-                res.setHeader( 'content-type', serialized.contentType )
-            }
-            end( res, code, message, serialized && serialized.data || serialized )
         }
+    }
+}
+
+function onAbortedOrFinishedResponse( res, readStream ) {
+    if( res.id === -1 ) {
+        log.error( "ERROR! onAbortedOrFinishedResponse called twice for the same res!" )
     } else {
-        log.warn( `Tried to finalize ended response for req: ${req.url}` )
+        readStream.destroy();
+    }
+    res.id = -1;
+}
+
+function toArrayBuffer( buffer ) {
+    return buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength );
+}
+
+const streamResponse = ( res, readStream ) => {
+    let totalSize = res.getHeader( 'Content-Length' );
+    if( !totalSize ) {
+        throw new Error( 'the Content-Length header must be set when responding with a stream body' )
+    }
+    totalSize = parseInt( totalSize )
+    if( totalSize <= 0 ) {
+        readStream.close()
+        res.end( '' )
+        return
+    }
+    //borrowed from https://github.com/uNetworking/uWebSockets.js/blob/8ba1edc0bbd05f97f6b1c8a03fd93be89bec458d/examples/VideoStreamer.js#L38
+    readStream.on( 'data', chunk => {
+        const ab = toArrayBuffer( chunk );
+        let lastOffset = res.getWriteOffset();
+        let [ok, done] = res.tryEnd( ab, totalSize );
+        if( done ) {
+            onAbortedOrFinishedResponse( res, readStream );
+            res.writableEnded = true
+            res.end()
+        } else if( !ok ) {
+            readStream.pause();
+            res.ab = ab;
+            res.abOffset = lastOffset;
+            res.onWritable( ( offset ) => {
+                let [ok, done] = res.tryEnd( res.ab.slice( offset - res.abOffset ), totalSize );
+                if( done ) {
+                    onAbortedOrFinishedResponse( res, readStream );
+                    res.writableEnded = true
+                    res.end()
+                } else if( ok ) {
+                    readStream.resume();
+                }
+                return ok;
+            } );
+        }
+    } )
+        .on( 'error', e => endError( res, e, uuid() ) )
+}
+
+const serializeBody = ( body, res ) => {
+    let contentType = res.headers['content-type']
+    if( typeof body === 'string' ) {
+        if( !contentType ) {
+            res.headers['content-type'] = 'text/plain'
+        }
+        return body
+    } else if( body instanceof Readable ) {
+        return body
+    }
+    {
+        let serialized = content.serialize( body, contentType )
+
+        if( serialized && serialized.contentType && !contentType ) {
+            res.headers['content-type'] = serialized.contentType
+        }
+        return serialized && serialized.data || serialized
     }
 }
 
 async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
     if( !middleware ) return
+
+    let applicableMiddleware = middleware[req.method]
+    if( middleware.ALL ) {
+        if( applicableMiddleware ) applicableMiddleware.concat( middleware.ALL )
+        else applicableMiddleware = middleware.ALL
+    }
+
+    if( !applicableMiddleware || applicableMiddleware.length === 0 ) {
+        return
+    }
+    const errorMiddleware = applicableMiddleware.filter( mw => mw.length === 4 )
+    const middlewarez = applicableMiddleware.filter( mw => mw.length === 3 )
     try {
         if( e )
-            await executeMiddleware( middleware, req, res, e )
+            await executeMiddleware( middlewarez, errorMiddleware, req, res, e )
         else
-            await executeMiddleware( middleware, req, res )
+            await executeMiddleware( middlewarez, errorMiddleware, req, res )
     } catch( e ) {
         if( !refId ) refId = uuid()
         console.log( 'Failed executing middleware while handling error: ' + e )
-        handleError( res, e, refId )
+        endError( res, e, refId )
     }
 }
 
@@ -127,11 +205,8 @@ let currentDate = new Date().toUTCString()
 setInterval( () => currentDate = new Date().toUTCString(), 1000 )
 
 const handleRequest = async ( req, res, handler, middleware, pathParameters ) => {
-    req = decorateRequest( req, res )
-    res = decorateResponse( res, req, finalizeResponse )
-
-    res.setHeader( 'server', 'uws' )
-    res.setHeader( 'date', currentDate )
+    res.headers['server'] = 'uWebSockets.js'
+    res.headers['date'] = currentDate
     try {
         let buffer
         let reqBody = await new Promise(
@@ -144,20 +219,16 @@ const handleRequest = async ( req, res, handler, middleware, pathParameters ) =>
                     buffer = Buffer.concat( [buffer, Buffer.from( data )].filter( b => b ) )
                 } )
         )
-        req.spliffyUrl.pathParameters = {}
-        for(let i in pathParameters) {
-            req.spliffyUrl.pathParameters[pathParameters[i]] = req.getParameter(i)
-        }
         await tryExecuteMiddleware( middleware, req, res )
         if( !res.writableEnded ) {
-            await handle( req.spliffyUrl, res, req, reqBody, handler, middleware )
+            await executeHandler( req.spliffyUrl, res, req, reqBody, handler, middleware )
         }
     } catch( e ) {
         let refId = uuid()
         log.error( 'Handling request failed', e, refId )
         await tryExecuteMiddleware( middleware, req, res, e, refId );
         if( !res.writableEnded )
-            handleError( res, e, refId )
+            endError( res, e, refId )
     }
 }
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
@@ -168,7 +239,18 @@ module.exports =
                 if( serverConfig.current.logAccess ) {
                     res.onEnd = logAccess( req, res )
                 }
-                handleRequest( req, res, handler, middleware, pathParameters )
+                handleRequest( decorateRequest( req, pathParameters, res ), decorateResponse( res, req, finalizeResponse ), handler, middleware, pathParameters )
+            } catch( e ) {
+                log.error( 'Failed handling request', e )
+            }
+        },
+        notFound: ( res, req ) => {
+            try {
+                if( serverConfig.current.logAccess ) {
+                    res.onEnd = logAccess( req, res )
+                }
+                res.writeStatus('404 Not Found')
+                res.end()
             } catch( e ) {
                 log.error( 'Failed handling request', e )
             }

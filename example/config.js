@@ -25,6 +25,7 @@ module.exports = ( ) =>
               }
           ]
         },
+        printRoutes: true,
         resolveWithoutExtension: '.js',
-        cacheStatic: true
+        cacheStatic: false
     } )
