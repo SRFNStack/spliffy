@@ -7,7 +7,6 @@ module.exports = async function( config ) {
     if( !config || !config.routeDir ) {
         throw 'You must supply a config object with at least a routeDir property. routeDir should be a full path.'
     }
-    log.gne( 'Starting Spliffy!' )
     process
         .on( 'unhandledRejection', ( reason, p ) => {
             log.error( randomNonsense(), reason, 'Unhandled Rejection at Promise', p )
@@ -18,5 +17,6 @@ module.exports = async function( config ) {
         } )
 
     serverConfig.init( config )
+    log.gne( 'Starting Spliffy!' )
     server.start()
 }

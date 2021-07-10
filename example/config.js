@@ -26,6 +26,7 @@ module.exports = ( ) =>
           ]
         },
         printRoutes: true,
+        logLevel: 'DEBUG',
         resolveWithoutExtension: '.js',
         cacheStatic: false
     } )
