@@ -250,7 +250,8 @@ module.exports =
                 if( serverConfig.current.logAccess ) {
                     res.onEnd = logAccess( decorateRequest( req, [], res ), decorateResponse( res, req, finalizeResponse ) )
                 }
-                res.writeStatus( '404 Not Found' )
+                res.statusCode = 404
+                res.statusMessage = 'Not Found'
                 res.end()
             } catch( e ) {
                 log.error( 'Failed handling request', e )

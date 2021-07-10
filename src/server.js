@@ -50,9 +50,10 @@ const start = () => {
                 log.info( 'Configured Route: ', route )
             }
             for( let method in route.handlers ) {
-                app[appMethods[method]]( route.urlPath, handler.create( route.handlers[method], route.middleware, route.pathParameters ) )
+                let theHandler = handler.create( route.handlers[method], route.middleware, route.pathParameters );
+                app[appMethods[method]]( route.urlPath, theHandler )
                 if( route.urlPath.endsWith( '/' ) && route.urlPath.length > 1 ) {
-                    app[appMethods[method]]( route.urlPath.substr(0,route.urlPath.length-1), handler.create( route.handlers[method], route.middleware, route.pathParameters ) )
+                    app[appMethods[method]]( route.urlPath.substr(0,route.urlPath.length-1), theHandler )
                 }
             }
             if( !route.handlers.OPTIONS ) {

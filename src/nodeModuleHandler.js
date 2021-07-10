@@ -22,7 +22,7 @@ module.exports = {
             if( !fs.existsSync( nodeModulesDir ) ) {
                 throw new Error( `Unable to find node_modules dir at ${nodeModulesDir}` )
             }
-            let prefix = nodeModuleRoutes.routePrefix || 'lib'
+            let prefix = stripLeadingSlash(nodeModuleRoutes.routePrefix || 'lib')
             if( !Array.isArray( nodeModuleRoutes.files ) ) {
                 nodeModuleRoutes.files = [nodeModuleRoutes.files]
             }
@@ -30,10 +30,10 @@ module.exports = {
                 let filePath, urlPath
                 if( file && typeof file === 'object' ) {
                     filePath = path.join( nodeModulesDir, file.modulePath )
-                    urlPath = `${prefix}/${stripLeadingSlash( file.urlPath || file.modulePath )}`
+                    urlPath = `/${prefix}/${stripLeadingSlash( file.urlPath || file.modulePath )}`
                 } else if( file && typeof file === 'string' ) {
                     filePath = path.join( nodeModulesDir, file )
-                    urlPath = `${prefix}/${stripLeadingSlash( file )}`
+                    urlPath = `/${prefix}/${stripLeadingSlash( file )}`
                 } else {
                     throw new Error( 'Invalid node_module file: ' + file )
                 }
@@ -48,7 +48,7 @@ module.exports = {
                         pathParameters: [],
                         urlPath,
                         filePath,
-                        handlers: staticHandler.create( path, getContentTypeByExtension(lastPart, serverConfig.current.staticContentTypes) ),
+                        handlers: staticHandler.create( filePath, getContentTypeByExtension(lastPart, serverConfig.current.staticContentTypes) ),
                         middleware: mw
                     } )
                 } else {
