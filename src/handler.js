@@ -178,7 +178,7 @@ async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
 
     let applicableMiddleware = middleware[req.method]
     if( middleware.ALL ) {
-        if( applicableMiddleware ) applicableMiddleware = applicableMiddleware.concat( middleware.ALL )
+        if( applicableMiddleware ) applicableMiddleware = middleware.ALL.concat( applicableMiddleware )
         else applicableMiddleware = middleware.ALL
     }
 
