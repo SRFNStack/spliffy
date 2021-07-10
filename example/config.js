@@ -27,6 +27,7 @@ module.exports = ( ) =>
         },
         printRoutes: true,
         logLevel: 'DEBUG',
+        notFoundRoute: '/404.html',
         resolveWithoutExtension: '.js',
         cacheStatic: false
     } )

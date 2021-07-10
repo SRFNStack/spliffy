@@ -247,12 +247,26 @@ module.exports =
         },
         notFound: ( res, req ) => {
             try {
+                let params = serverConfig.current.defaultRoute && serverConfig.current.defaultRoute.pathParameters || []
+                req = decorateRequest( req, params, res );
+                res = decorateResponse( res, req, finalizeResponse );
                 if( serverConfig.current.logAccess ) {
-                    res.onEnd = logAccess( decorateRequest( req, [], res ), decorateResponse( res, req, finalizeResponse ) )
+                    res.onEnd = logAccess( req, res )
                 }
-                res.statusCode = 404
-                res.statusMessage = 'Not Found'
-                res.end()
+                if(serverConfig.current.defaultRoute && typeof serverConfig.current.defaultRoute){
+                    let route = serverConfig.current.defaultRoute
+                    if(route.handlers && route.handlers[req.method]){
+                        handleRequest(req, res, serverConfig.current.defaultRoute.handlers[req.method])
+                    } else {
+                        res.statusCode = 405
+                        res.statusMessage = 'Method Not Allowed'
+                        res.end()
+                    }
+                } else {
+                    res.statusCode = 404
+                    res.statusMessage = 'Not Found'
+                    res.end()
+                }
             } catch( e ) {
                 log.error( 'Failed handling request', e )
             }

@@ -49,6 +49,10 @@ const start = () => {
             if( serverConfig.current.printRoutes ) {
                 log.info( 'Configured Route: ', route )
             }
+            let routePattern = `^${route.urlPath.replace(/:[^/]+/g, "[^/]+").replace(/\*/g, ".*")}$`
+            if(serverConfig.current.notFoundRoute && serverConfig.current.notFoundRoute.match(routePattern)){
+                serverConfig.current.defaultRoute = route
+            }
             for( let method in route.handlers ) {
                 let theHandler = handler.create( route.handlers[method], route.middleware, route.pathParameters );
                 app[appMethods[method]]( route.urlPath, theHandler )
@@ -59,6 +63,10 @@ const start = () => {
             if( !route.handlers.OPTIONS ) {
                 app.options( route.urlPath, optionsHandler( Object.keys( route.handlers ).join( ', ' ) ) )
             }
+        }
+
+        if(serverConfig.current.notFoundRoute && !serverConfig.current.defaultRoute) {
+            log.warn('No route matched default route: '+serverConfig.current.notFoundRoute)
         }
         app.any( '/*', handler.notFound )
         app.listen( serverConfig.current.host || '0.0.0.0', serverConfig.current.port, ( token ) => {
