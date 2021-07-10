@@ -156,7 +156,7 @@ const streamResponse = ( res, readStream ) => {
 }
 
 const serializeBody = ( body, res ) => {
-    let contentType = res.headers['content-type']
+    let contentType = res.getHeader( 'content-type' )
     if( typeof body === 'string' ) {
         if( !contentType ) {
             res.headers['content-type'] = 'text/plain'
@@ -165,14 +165,12 @@ const serializeBody = ( body, res ) => {
     } else if( body instanceof Readable ) {
         return body
     }
-    {
-        let serialized = content.serialize( body, contentType )
+    let serialized = content.serialize( body, contentType )
 
-        if( serialized && serialized.contentType && !contentType ) {
-            res.headers['content-type'] = serialized.contentType
-        }
-        return serialized && serialized.data || serialized
+    if( serialized && serialized.contentType && !contentType ) {
+        res.headers['content-type'] = serialized.contentType
     }
+    return serialized && serialized.data || ''
 }
 
 async function tryExecuteMiddleware( middleware, req, res, e, refId ) {
@@ -236,10 +234,13 @@ module.exports =
     {
         create: ( handler, middleware, pathParameters ) => function( res, req ) {
             try {
+                req = decorateRequest( req, pathParameters, res );
+                res = decorateResponse( res, req, finalizeResponse );
+
                 if( serverConfig.current.logAccess ) {
                     res.onEnd = logAccess( req, res )
                 }
-                handleRequest( decorateRequest( req, pathParameters, res ), decorateResponse( res, req, finalizeResponse ), handler, middleware, pathParameters )
+                handleRequest( req, res, handler, middleware, pathParameters )
             } catch( e ) {
                 log.error( 'Failed handling request', e )
             }
@@ -247,9 +248,9 @@ module.exports =
         notFound: ( res, req ) => {
             try {
                 if( serverConfig.current.logAccess ) {
-                    res.onEnd = logAccess( req, res )
+                    res.onEnd = logAccess( decorateRequest( req, [], res ), decorateResponse( res, req, finalizeResponse ) )
                 }
-                res.writeStatus('404 Not Found')
+                res.writeStatus( '404 Not Found' )
                 res.end()
             } catch( e ) {
                 log.error( 'Failed handling request', e )
