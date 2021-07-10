@@ -116,7 +116,7 @@ function toArrayBuffer( buffer ) {
 }
 
 const streamResponse = ( res, readStream ) => {
-    let totalSize = res.getHeader( 'Content-Length' );
+    let totalSize = res.getHeader( 'content-length' );
     if( !totalSize ) {
         throw new Error( 'the Content-Length header must be set when responding with a stream body' )
     }

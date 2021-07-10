@@ -38,20 +38,22 @@ module.exports = {
                 if( serverConfig.current.cacheStatic ) {
                     if( !cache.exists || !cache.stat ) {
                         cache.exists = fs.existsSync( fullPath )
-                        if(cache.exists){
+                        if( cache.exists ) {
                             cache.stat = await readStat( fullPath )
-                            cache.content =  await readFile( fullPath )
+                            cache.content = await readFile( fullPath )
                             cache.etag = etag( cache.content )
                         }
                     }
-                    if(!cache.exists){
+                    if( !cache.exists ) {
                         return {
                             statusCode: 404,
                             statusMessage: 'Not Found'
                         }
                     }
-
                     writeHeaders( req, res, cache.etag, cache.stat, contentType )
+                    if( res.statusCode === 304 ) {
+                        return
+                    }
                     return cache.content
                 } else {
                     if( !fs.existsSync( fullPath ) ) {
@@ -62,6 +64,9 @@ module.exports = {
                     }
                     let stat = await readStat( fullPath )
                     writeHeaders( req, res, etag( stat ), stat, contentType )
+                    if( res.statusCode === 304 ) {
+                        return
+                    }
                     res.flushHeaders()
                     if( stat.size === 0 ) {
                         return ""
