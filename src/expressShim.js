@@ -58,6 +58,9 @@ module.exports = {
     },
     decorateResponse( res, req, finalizeResponse ) {
         res.onAborted( () => {
+            res.ended = true
+            res.writableEnded = true
+            res.finalized = true
             log.error( `Request to ${req.url} was aborted prematurely` )
         } )
         const initHeaders = {}
