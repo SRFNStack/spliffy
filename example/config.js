@@ -6,6 +6,7 @@ module.exports = ( ) =>
         staticContentTypes: {
             '.spliff': 'image/png'
         },
+        logAccess: true,
         decodeQueryParameters: true,
         middleware: [
             ( req, res, next ) => {
@@ -24,6 +25,9 @@ module.exports = ( ) =>
               }
           ]
         },
+        printRoutes: true,
+        logLevel: 'DEBUG',
+        notFoundRoute: '/404.html',
         resolveWithoutExtension: '.js',
-        cacheStatic: true
+        cacheStatic: false
     } )

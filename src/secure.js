@@ -25,29 +25,18 @@ const startHttpRedirect = () => {
     } )
 }
 
-let startServer = () => {
+let getHttpsApp = () => {
     const secure = serverConfig.current.secure
-    if( !secure.key || !secure.cert ) throw 'You must supply an secure key and cert!'
+    if( !secure || !secure.key || !secure.cert ) throw 'You must set secure.key and secure.cert in the config to use https!'
     let keyPath = path.resolve( secure.key )
     let certPath = path.resolve( secure.cert )
     if( !fs.existsSync( keyPath ) ) throw `Can't find https key file: ${keyPath}`
     if( !fs.existsSync( certPath ) ) throw `Can't find https cert file: ${keyPath}`
-    let port = secure.port || 14420;
-    uws.App( {
+    return uws.App( {
         key_file_name: secure.key,
         cert_file_name: secure.cert
-    } ).listen( serverConfig.current.host || '0.0.0.0', port, ( token ) => {
-        if( token ) {
-            log.gne( `Https server initialized at ${new Date().toISOString()} and listening on port ${port}` )
-        } else {
-            throw new Error( `Failed to start server on port ${port}` )
-        }
     } )
-
 }
 module.exports = {
-    startHttps: () => {
-        startServer()
-        startHttpRedirect()
-    }
+    getHttpsApp, startHttpRedirect
 }

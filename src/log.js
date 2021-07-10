@@ -1,5 +1,5 @@
 const inspect = require( 'util' ).inspect
-const levelOrder = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 }
+const levelOrder = { DEBUG: 0, INFO: 1, 'GOOD NEWS EVERYONE!': 1, WARN: 2, ERROR: 3, NONE: 4 }
 let logAccess = true
 let logLevel = levelOrder.INFO
 

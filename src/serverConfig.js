@@ -29,7 +29,6 @@ module.exports = {
     init( config ) {
         Object.assign( current, config )
 
-
         if( !config.hasOwnProperty( 'decodePathParameters' ) ) {
             current.decodePathParameters = true
         }
