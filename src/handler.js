@@ -102,57 +102,42 @@ const finalizeResponse = ( req, res, handled ) => {
     }
 }
 
-function onAbortedOrFinishedResponse( res, readStream ) {
-    if( res.id === -1 ) {
-        log.error( "ERROR! onAbortedOrFinishedResponse called twice for the same res!" )
-    } else {
-        readStream.destroy();
-    }
-    res.id = -1;
-}
-
 function toArrayBuffer( buffer ) {
     return buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength );
 }
 
+const endStream = ( res, length, readStream ) => () =>{
+    if(!readStream.destroyed){
+        readStream.destroy()
+    }
+    if(!res.ended){
+        //mark readable ended so the headers don't get flushed again
+        res.writableEnded = true
+        res.end()
+        //call end for cuz
+        res.uwsEnd()
+    }
+}
+
 const streamResponse = ( res, readStream ) => {
-    let totalSize = res.getHeader( 'content-length' );
-    if( !totalSize ) {
-        throw new Error( 'the Content-Length header must be set when responding with a stream body' )
-    }
-    totalSize = parseInt( totalSize )
-    if( totalSize <= 0 ) {
-        readStream.close()
-        res.end( '' )
-        return
-    }
-    //borrowed from https://github.com/uNetworking/uWebSockets.js/blob/8ba1edc0bbd05f97f6b1c8a03fd93be89bec458d/examples/VideoStreamer.js#L38
+    let length = 0;
+    res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
+    res.flushHeaders()
     readStream.on( 'data', chunk => {
-        const ab = toArrayBuffer( chunk );
-        let lastOffset = res.getWriteOffset();
-        let [ok, done] = res.tryEnd( ab, totalSize );
-        if( done ) {
-            onAbortedOrFinishedResponse( res, readStream );
-            res.writableEnded = true
-            res.end()
-        } else if( !ok ) {
-            readStream.pause();
-            res.ab = ab;
-            res.abOffset = lastOffset;
-            res.onWritable( ( offset ) => {
-                let [ok, done] = res.tryEnd( res.ab.slice( offset - res.abOffset ), totalSize );
-                if( done ) {
-                    onAbortedOrFinishedResponse( res, readStream );
-                    res.writableEnded = true
-                    res.end()
-                } else if( ok ) {
-                    readStream.resume();
-                }
-                return ok;
-            } );
+        if( !( chunk instanceof Buffer ) ) {
+            throw new Error( 'Data pushed to the response body stream must be a Buffer' )
         }
+        res.write( toArrayBuffer( chunk ) )
     } )
-        .on( 'error', e => endError( res, e, uuid() ) )
+        .on( 'end', endStream( res, length, readStream ) )
+        .on( 'close', endStream( res, length, readStream ) )
+        .on( 'error', e => {
+            try {
+                readStream.destroy()
+            } finally {
+                endError( res, e, uuid() )
+            }
+        } )
 }
 
 const serializeBody = ( body, res ) => {
@@ -253,10 +238,10 @@ module.exports =
                 if( serverConfig.current.logAccess ) {
                     res.onEnd = logAccess( req, res )
                 }
-                if(serverConfig.current.defaultRoute && typeof serverConfig.current.defaultRoute){
+                if( serverConfig.current.defaultRoute && typeof serverConfig.current.defaultRoute ) {
                     let route = serverConfig.current.defaultRoute
-                    if(route.handlers && route.handlers[req.method]){
-                        handleRequest(req, res, serverConfig.current.defaultRoute.handlers[req.method])
+                    if( route.handlers && route.handlers[req.method] ) {
+                        handleRequest( req, res, serverConfig.current.defaultRoute.handlers[req.method] )
                     } else {
                         res.statusCode = 405
                         res.statusMessage = 'Method Not Allowed'

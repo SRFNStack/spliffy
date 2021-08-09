@@ -8,24 +8,24 @@ const defaultHeaders = {
 }
 //this is mainly for performance reason
 const nonsense = [
-    'Is it getting hot in here?',
-    'Ouch...',
-    'Not feeling so good',
-    'Look a squirrel!',
-    'I swear I only had 3',
+    `i'm toasted`,
+    'that hurt',
+    'feels bad man :(',
+    `squirrel! ~-{  }:>`,
+    'your interwebs!',
     'I see a light...',
-    'Totally zooted',
-    'Where are my pants?',
-    'Somebody, anyone, help!',
-    'What was I doing again?',
-    'Burninating the codeessss',
-    'Leeeeerrrooooyyy Jeeenkins',
-    'At least I have chicken'
+    `I'm zooted`,
+    'misplaced my bits',
+    'maybe reboot?',
+    'what was I doing again?',
+    'my cabbages!!!',
+    'Leeerrroooyyy Jeeenkins',
+    'at least I have chicken'
 ]
 
 module.exports = {
     current,
-    randomNonsense: () => `~[OHNO]{${nonsense[Math.floor( Math.random() * nonsense.length )]}}~`,
+    randomNonsense: () => `[OH NO, ${nonsense[Math.floor( Math.random() * nonsense.length )]}]`,
     init( config ) {
         Object.assign( current, config )
 

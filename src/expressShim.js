@@ -45,8 +45,8 @@ module.exports = {
         req.method = uwsReq.getMethod().toUpperCase()
         req.remoteAddress = addressArrayBufferToString( res.getRemoteAddressAsText() )
         req.proxiedRemoteAddress = addressArrayBufferToString( res.getProxiedRemoteAddressAsText() ) || undefined
-        uwsReq.forEach( ( header, value ) => setMultiValueKey( req.headers, header.toLowerCase(), value ) )
-        req.get = header => req.headers[header.toLowerCase()]
+        uwsReq.forEach( ( header, value ) => setMultiValueKey( req.headers, normalizeHeader(header), value ) )
+        req.get = header => req.headers[normalizeHeader(header)]
         if( serverConfig.current.parseCookie && req.headers.cookie ) {
             req.cookies = cookie.parse( req.headers.cookie ) || {}
         }
@@ -63,7 +63,6 @@ module.exports = {
             res.finalized = true
             log.error( `Request to ${req.url} was aborted prematurely` )
         } )
-        const initHeaders = {}
 
         res.headers = {}
         res.headersSent = false
@@ -71,15 +70,14 @@ module.exports = {
             res.headers[normalizeHeader( header )] = value
         }
         res.removeHeader = header => {
-            delete initHeaders[normalizeHeader( header )]
             delete res.headers[normalizeHeader( header )]
         }
         res.flushHeaders = () => {
             if( res.headersSent ) return
             res.headersSent = true
-            // https://nodejs.org/api/http.html#http_response_writehead_statuscode_statusmessage_headers
-            //When headers have been set with response.setHeader(), they will be merged with any headers passed to response.initHeaders(), with the headers passed to response.initHeaders() given precedence.
-            Object.assign( res.headers, initHeaders )
+            if(typeof res.onFlushHeaders === 'function') {
+                res.onFlushHeaders(res)
+            }
             for( let header of Object.keys( res.headers ) ) {
                 if( Array.isArray( res.headers[header] ) ) {
                     for( let multiple of res.headers[header] ) {
@@ -96,31 +94,30 @@ module.exports = {
         }
         res.assignHeaders = headers => {
             for( let header of Object.keys( headers ) ) {
-                initHeaders[header.toLowerCase()] = headers[header]
+                res.headers[normalizeHeader(header)] = headers[header]
             }
         }
         res.getHeader = header => {
-            let normalized = normalizeHeader( header );
-            return initHeaders[normalized] || res.headers[normalized]
+            return res.headers[normalizeHeader( header )]
         }
         res.status = ( code ) => {
             this.statusCode = code
             return this
         }
-
-        const ogEnd = res.end
+        //use at your own risk
+        res.uwsEnd = res.end;
         res.ended = false
         res.end = body => {
             if( res.ended ) {
                 return
             }
             res.ended = true
-            //has to be separate to allow streaming
+            //provide writableEnded like node does
             if( !res.writableEnded ) {
                 res.writableEnded = true
                 res.writeStatus( `${res.statusCode} ${res.statusMessage}` )
                 res.flushHeaders()
-                ogEnd.call( res, body )
+                res.uwsEnd( body )
             }
             if( typeof res.onEnd === 'function' ) {
                 res.onEnd()
