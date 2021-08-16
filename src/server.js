@@ -1,4 +1,3 @@
-const serverConfig = require( './serverConfig' )
 const log = require( './log' )
 const { getNodeModuleRoutes } = require( "./nodeModuleHandler" );
 const uws = require( 'uWebSockets.js' )
@@ -22,42 +21,43 @@ const appMethods = {
     TRACE: 'trace'
 }
 const optionsHandler = methods => {
-    return ( res ) => {
-        res.headers['allow'] = methods
-        res.writeStatus( '204' )
-        res.end()
-    }
+    return () => ( {
+        headers: {
+            allow: methods,
+        },
+        statusCode: 204
+    } )
 };
 
 /**
  * Load the routes
  */
-const start = () => {
+const start = config => {
     if( !state.initialized ) {
         state.initialized = true
-        const routes = [...findRoutes(), ...getNodeModuleRoutes()]
+        const routes = [...findRoutes( config ), ...getNodeModuleRoutes( config )]
         let app, port
-        if( serverConfig.current.secure ) {
-            app = getHttpsApp()
-            port = serverConfig.current.secure.port || 14420
-            startHttpRedirect()
+        if( config.secure ) {
+            app = getHttpsApp( config.secure )
+            port = config.secure.port || 14420
+            startHttpRedirect( config.host, config.port )
         } else {
             app = uws.App()
-            port = serverConfig.current.port
+            port = config.port
         }
         for( let route of routes ) {
-            if( serverConfig.current.printRoutes ) {
+            if( config.printRoutes ) {
                 log.info( 'Configured Route: ', route )
             }
-            let routePattern = `^${route.urlPath.replace(/:[^/]+/g, "[^/]+").replace(/\*/g, ".*")}$`
-            if(serverConfig.current.notFoundRoute && serverConfig.current.notFoundRoute.match(routePattern)){
-                serverConfig.current.defaultRoute = route
+            let routePattern = `^${route.urlPath.replace( /:[^/]+/g, "[^/]+" ).replace( /\*/g, ".*" )}$`
+            if( config.notFoundRoute && config.notFoundRoute.match( routePattern ) ) {
+                config.defaultRoute = route
             }
             for( let method in route.handlers ) {
-                let theHandler = handler.create( route.handlers[method], route.middleware, route.pathParameters );
+                let theHandler = handler.create( route.handlers[method], route.middleware, route.pathParameters, config );
                 app[appMethods[method]]( route.urlPath, theHandler )
                 if( route.urlPath.endsWith( '/' ) && route.urlPath.length > 1 ) {
-                    app[appMethods[method]]( route.urlPath.substr(0,route.urlPath.length-1), theHandler )
+                    app[appMethods[method]]( route.urlPath.substr( 0, route.urlPath.length - 1 ), theHandler )
                 }
             }
             if( !route.handlers.OPTIONS ) {
@@ -65,11 +65,11 @@ const start = () => {
             }
         }
 
-        if(serverConfig.current.notFoundRoute && !serverConfig.current.defaultRoute) {
-            log.warn('No route matched default route: '+serverConfig.current.notFoundRoute)
+        if( config.notFoundRoute && !config.defaultRoute ) {
+            log.warn( 'No route matched default route: ' + config.notFoundRoute )
         }
-        app.any( '/*', handler.notFound )
-        app.listen( serverConfig.current.host || '0.0.0.0', serverConfig.current.port, ( token ) => {
+        app.any( '/*', handler.notFound( config ) )
+        app.listen( config.host || '0.0.0.0', config.port, ( token ) => {
             if( token ) {
                 log.gne( `Server initialized at ${new Date().toISOString()} and listening on port ${port}` )
             } else {

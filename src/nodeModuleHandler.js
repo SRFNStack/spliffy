@@ -1,6 +1,5 @@
 const fs = require( 'fs' )
 const path = require( 'path' )
-const serverConfig = require( './serverConfig' )
 const { mergeMiddleware } = require( "./middleware" );
 const staticHandler = require( './staticHandler' )
 const { getContentTypeByExtension } = require( './content' )
@@ -14,11 +13,11 @@ module.exports = {
      Generating the list of files using pattern matching yourself is highly discouraged.
      It is much safer to explicitly list every file you wish to be served so you don't inadvertently serve additional files.
      */
-    getNodeModuleRoutes() {
-        let nodeModuleRoutes = serverConfig.current.nodeModuleRoutes;
+    getNodeModuleRoutes(config) {
+        let nodeModuleRoutes = config.nodeModuleRoutes;
         let routes = []
         if( nodeModuleRoutes && typeof nodeModuleRoutes === 'object' ) {
-            const nodeModulesDir = nodeModuleRoutes.nodeModulesPath ? path.resolve( nodeModuleRoutes.nodeModulesPath ) : path.resolve( serverConfig.current.routeDir, '..', 'node_modules' )
+            const nodeModulesDir = nodeModuleRoutes.nodeModulesPath ? path.resolve( nodeModuleRoutes.nodeModulesPath ) : path.resolve( config.routeDir, '..', 'node_modules' )
             if( !fs.existsSync( nodeModulesDir ) ) {
                 throw new Error( `Unable to find node_modules dir at ${nodeModulesDir}` )
             }
@@ -42,13 +41,16 @@ module.exports = {
                     let parts = urlPath.split( '/' )
                     let lastPart = parts.pop()
                     let mw = {}
-                    mergeMiddleware( serverConfig.current.middleware, mw )
+                    mergeMiddleware( config.middleware, mw )
                     mergeMiddleware( nodeModuleRoutes.middleware || {}, mw )
                     routes.push( {
                         pathParameters: [],
                         urlPath,
                         filePath,
-                        handlers: staticHandler.create( filePath, getContentTypeByExtension(lastPart, serverConfig.current.staticContentTypes) ),
+                        handlers: staticHandler.create(
+                            filePath, getContentTypeByExtension(lastPart, config.staticContentTypes),
+                            config.cacheStatic, config.staticCacheControl
+                        ),
                         middleware: mw
                     } )
                 } else {

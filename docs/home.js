@@ -65,14 +65,13 @@ require(\'spliffy\')({
     hr(),
 
 
-    h3( { id: 'handler-return' }, 'Handler Return' ),
-    p( 'The handler can return any kind of data and it will be serialized automatically if there is a known serializer for the specified content-type. The default, application/json, is already set.' ),
-    p( 'If the returned value is Falsey, we will assume everything is fine and return a 200 OK.' ),
-    p( 'You can return a promise that resolves to the response value, and the server will respond with the resolved value.' ),
-    p( 'If you need to set the statusCode, headers, etc, you must either ',
-        b( 'return' ),
-        'or ',
-        b( 'throw' ),
+    h3( { id: 'handler-return' }, 'What to return from the handler' ),
+    p( 'The handler can return any kind of data and it will be serialized if there is a serializer for the specified content-type.' +
+        ' The default, application/json, is used by default when returning an object.' ),
+    p( 'If the returned value is Falsey, a 200 OK is returned.' ),
+    p( 'If the returned value is a promise, it will be resolved and handled as usual.' ),
+    p( 'To set the statusCode, headers, etc, you must either ',
+        b( 'return' ), 'or ', b( 'throw' ),
         ' an object with a body property for the body and optionally one or more of the following properties' ),
     prismCode( `{
     headers: {

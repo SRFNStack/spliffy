@@ -1,22 +1,20 @@
-const serverConfig = require( './serverConfig' )
 const fs = require( 'fs' )
 const log = require( './log' )
 const path = require( 'path' )
 const uws = require( 'uWebSockets.js' )
 
-const startHttpRedirect = () => {
+const startHttpRedirect = ( host, port) => {
     //redirect http to https
-    let port = serverConfig.current.port;
     uws.App().any( "/*",
         ( req, res ) => {
             try {
-                res.writeHead( 301, { 'Location': `https://${req.headers.host}:${serverConfig.current.port}${req.url}` } )
+                res.writeHead( 301, { 'Location': `https://${req.headers.host}:${port}${req.url}` } )
                 res.end()
             } catch( e ) {
-                log.error( `Failed to handle http request on port ${serverConfig.current.port}`, req.url, e )
+                log.error( `Failed to handle http request on port ${port}`, req.url, e )
             }
         }
-    ).listen( serverConfig.current.host || '0.0.0.0', port, ( token ) => {
+    ).listen( host || '0.0.0.0', port, ( token ) => {
         if( token ) {
             log.gne( `Http redirect server initialized at ${new Date().toISOString()} and listening on port ${port}` )
         } else {
@@ -25,16 +23,15 @@ const startHttpRedirect = () => {
     } )
 }
 
-let getHttpsApp = () => {
-    const secure = serverConfig.current.secure
-    if( !secure || !secure.key || !secure.cert ) throw 'You must set secure.key and secure.cert in the config to use https!'
-    let keyPath = path.resolve( secure.key )
-    let certPath = path.resolve( secure.cert )
+let getHttpsApp = ({ key, cert }) => {
+    if( !key || !cert ) throw 'You must set secure.key and secure.cert in the config to use https!'
+    let keyPath = path.resolve( key )
+    let certPath = path.resolve( cert )
     if( !fs.existsSync( keyPath ) ) throw `Can't find https key file: ${keyPath}`
     if( !fs.existsSync( certPath ) ) throw `Can't find https cert file: ${keyPath}`
     return uws.App( {
-        key_file_name: secure.key,
-        cert_file_name: secure.cert
+        key_file_name: keyPath,
+        cert_file_name: certPath
     } )
 }
 module.exports = {
