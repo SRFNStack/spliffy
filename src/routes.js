@@ -3,15 +3,15 @@ const staticHandler = require( './staticHandler' )
 const { getContentTypeByExtension } = require( "./content" )
 const fs = require( 'fs' )
 const path = require( 'path' )
-const serverConfig = require( './serverConfig' )
 const { HTTP_METHODS } = require( './handler' )
 
 const isVariable = part => part.startsWith( '$' )
 const getVariableName = part => part.substr( 1 )
 const getPathPart = name => {
-    if(name === 'index'){
+    if( name === 'index' ) {
         return ''
-    } if( name.startsWith( '$' ) ) {
+    }
+    if( name.startsWith( '$' ) ) {
         return `:${name.substr( 1 )}`
     } else if( name.endsWith( '+' ) ) {
         return `${name.substr( 0, name.length - 1 )}/*`
@@ -19,7 +19,8 @@ const getPathPart = name => {
         return name
     }
 }
-const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inheritedMiddleware ) => {
+const ignoreHandlerFields = { middleware: true, streamRequestBody: true }
+const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, inheritedMiddleware ) => {
     let routes = []
     let name = currentFile.name;
     if( currentFile.isDirectory() ) {
@@ -33,7 +34,7 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
             .map( f => {
                 let mw = require( filePath + '/' + f.name )
                 if( !mw.middleware ) {
-                    throw new Error( '.mw.js files must export a middleware property' )
+                    throw new Error( `${filePath + '/' + f.name} must export a middleware property` )
                 }
                 validateMiddleware( mw.middleware )
                 return mw.middleware
@@ -45,6 +46,7 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
                     .filter( f => !f.name.endsWith( '.mw.js' ) )
                     .map(
                         ( f ) => doFindRoutes(
+                            config,
                             f,
                             filePath + '/' + f.name,
                             urlPath + '/' + getPathPart( name ),
@@ -54,7 +56,7 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
                     )
             ).flat()
         )
-    } else if( !serverConfig.current.staticMode && name.endsWith( '.rt.js' ) ) {
+    } else if( !config.staticMode && name.endsWith( '.rt.js' ) ) {
         name = name.substr( 0, name.length - '.rt.js'.length )
         if( isVariable( name ) ) {
             pathParameters = pathParameters.concat( getVariableName( name ) )
@@ -67,13 +69,22 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
         }
         const handlers = require( filePath )
         route.middleware = mergeMiddleware( handlers.middleware || [], inheritedMiddleware )
-        for( let method of Object.keys( handlers ).filter( k => k !== 'middleware' ) ) {
+        for( let method of Object.keys( handlers ).filter( k => !ignoreHandlerFields[k] ) ) {
             if( HTTP_METHODS.indexOf( method ) === -1 ) {
                 throw `Method: ${method} in file ${filePath} is not a valid http method. It must be one of: ${HTTP_METHODS}. Method names must be all uppercase.`
             }
-            let handler = handlers[method]
+            let loadedHandler = handlers[method]
+            let handler = loadedHandler
+            if( typeof loadedHandler.handler === 'function' ) {
+                handler = loadedHandler.handler
+            }
             if( typeof handler !== 'function' ) {
-                throw `Request method ${method} must be a function. Got: ${handlers[method]}`
+                throw `Request method ${method} in file ${filePath} must be a function. Got: ${handlers[method]}`
+            }
+            if( !loadedHandler.hasOwnProperty( 'streamRequestBody' ) ) {
+                handler.streamRequestBody = handlers.streamRequestBody
+            } else {
+                handler.streamRequestBody = loadedHandler.streamRequestBody
             }
             route.handlers[method] = handler
         }
@@ -82,12 +93,13 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
         if( isVariable( name ) ) {
             pathParameters = pathParameters.concat( getVariableName( name ) )
         }
-        let contentType = getContentTypeByExtension( name, serverConfig.current.staticContentTypes )
+        let contentType = getContentTypeByExtension( name, config.staticContentTypes )
         let route = {
             pathParameters,
             urlPath: `${urlPath}/${getPathPart( name )}`,
             filePath,
-            handlers: staticHandler.create( filePath, contentType ),
+            handlers: staticHandler.create( filePath, contentType,
+                config.cacheStatic, config.staticCacheControl ),
             middleware: inheritedMiddleware
         }
 
@@ -97,7 +109,7 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
 
         routes.push( route )
 
-        for( let ext of serverConfig.current.resolveWithoutExtension ) {
+        for( let ext of config.resolveWithoutExtension ) {
             if( name.endsWith( ext ) ) {
                 let noExtRoute = Object.assign( {}, route )
                 noExtRoute.urlPath = `${urlPath}/${getPathPart( name.substr( 0, name.length - ext.length ) )}`
@@ -110,15 +122,15 @@ const doFindRoutes = ( currentFile, filePath, urlPath, pathParameters, inherited
 
 
 module.exports = {
-    findRoutes(){
-        const fullRouteDir = path.resolve( serverConfig.current.routeDir )
+    findRoutes(config) {
+        const fullRouteDir = path.resolve( config.routeDir )
         if( !fs.existsSync( fullRouteDir ) ) {
             throw `can't find route directory: ${fullRouteDir}`
         }
-        let appMiddleware = mergeMiddleware( serverConfig.current.middleware || [], {} )
+        let appMiddleware = mergeMiddleware( config.middleware || [], {} )
         return fs.readdirSync( fullRouteDir, { withFileTypes: true } )
             .map(
-                f => doFindRoutes( f, fullRouteDir + '/' + f.name, '', [], appMiddleware )
+                f => doFindRoutes( config, f, fullRouteDir + '/' + f.name, '', [], appMiddleware )
             )
             .flat()
     }

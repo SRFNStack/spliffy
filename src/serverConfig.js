@@ -1,69 +1,69 @@
 const content = require( './content' )
 const { validateMiddleware } = require( './middleware.js' )
 const log = require( './log' )
-let current = {}
+
 const defaultHeaders = {
     acceptsDefault: '*/*',
     defaultContentType: '*/*'
 }
 //this is mainly for performance reason
 const nonsense = [
-    'Is it getting hot in here?',
-    'Ouch...',
-    'Not feeling so good',
-    'Look a squirrel!',
-    'I swear I only had 3',
+    `I'm toasted`,
+    'that hurt',
+    'feels bad man :(',
+    `squirrel! ~-{  }:>`,
+    'your interwebs!',
     'I see a light...',
-    'Totally zooted',
-    'Where are my pants?',
-    'Somebody, anyone, help!',
-    'What was I doing again?',
-    'Burninating the codeessss',
-    'Leeeeerrrooooyyy Jeeenkins',
-    'At least I have chicken'
+    `totally zooted`,
+    'misplaced my bits',
+    'maybe reboot?',
+    'what was I doing again?',
+    'my cabbages!!!',
+    'Leeerrroooyyy Jeeenkins',
+    'at least I have chicken'
 ]
 
 module.exports = {
-    current,
-    randomNonsense: () => `~[OHNO]{${nonsense[Math.floor( Math.random() * nonsense.length )]}}~`,
-    init( config ) {
-        Object.assign( current, config )
+    randomNonsense: () => `[OH NO, ${nonsense[Math.floor( Math.random() * nonsense.length )]}]`,
+    init( userConfig ) {
+        const config = Object.assign( {}, userConfig )
 
         if( !config.hasOwnProperty( 'decodePathParameters' ) ) {
-            current.decodePathParameters = true
+            config.decodePathParameters = true
         }
 
         if( !config.hasOwnProperty( 'parseCookie' ) ) {
-            current.parseCookie = true
+            config.parseCookie = true
         }
 
-        current.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
-        current.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
+        config.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
+        config.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 
-        content.initContentHandlers(config.contentHandlers||{}, current.acceptsDefault)
-        current.resolveWithoutExtension = current.resolveWithoutExtension || []
-        if( !Array.isArray( current.resolveWithoutExtension ) ) {
-            current.resolveWithoutExtension = [current.resolveWithoutExtension]
-        }
-
-        if( current.resolveWithoutExtension.indexOf( '.htm' ) === -1 ) {
-            current.resolveWithoutExtension.push( '.htm' )
-        }
-        if( current.resolveWithoutExtension.indexOf( '.html' ) === -1 ) {
-            current.resolveWithoutExtension.push( '.html' )
+        content.initContentHandlers(config.contentHandlers||{}, config.acceptsDefault)
+        config.resolveWithoutExtension = config.resolveWithoutExtension || []
+        if( !Array.isArray( config.resolveWithoutExtension ) ) {
+            config.resolveWithoutExtension = [config.resolveWithoutExtension]
         }
 
-        if( current.middleware ) {
-            validateMiddleware( current.middleware )
+        if( config.resolveWithoutExtension.indexOf( '.htm' ) === -1 ) {
+            config.resolveWithoutExtension.push( '.htm' )
+        }
+        if( config.resolveWithoutExtension.indexOf( '.html' ) === -1 ) {
+            config.resolveWithoutExtension.push( '.html' )
         }
 
-        if( !current.hasOwnProperty( 'logAccess' ) ) {
-            current.logAccess = true
+        if( config.middleware ) {
+            validateMiddleware( config.middleware )
         }
-        log.setLogAccess( current.logAccess )
-        if( current.hasOwnProperty( 'logLevel' ) ) {
-            log.setLogLevel( current.logLevel )
+
+        if( !config.hasOwnProperty( 'logAccess' ) ) {
+            config.logAccess = true
         }
-        current.port = config.port || 10420
+        log.setLogAccess( config.logAccess )
+        if( config.hasOwnProperty( 'logLevel' ) ) {
+            log.setLogLevel( config.logLevel )
+        }
+        config.port = config.port || 10420
+        return config
     }
 }

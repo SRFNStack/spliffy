@@ -1,4 +1,5 @@
 const log = require( './log' )
+let url = require('./url')
 
 /**
  * Startup function for the spliffy server
@@ -15,11 +16,14 @@ const spliffy = ( config ) => require( './start' )( config )
  */
 spliffy.redirect = ( location, permanent = true ) => () => ( {
     statusCode: permanent ? 301 : 302,
+    statusMessage: permanent ? 'Moved Permanently' : 'Found',
     headers: {
         'location': location
     }
 } )
 
 spliffy.log = log
+spliffy.parseQuery = url.parseQuery
+spliffy.setMultiValueKey = url.setMultiValueKey
 
 module.exports = spliffy

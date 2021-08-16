@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ( { url: { pathParameters: { nested, path, params, here } } } ) => `/${nested}/${path}/${params}/${here}/`
+    GET: ( { url: { pathParameters: { nested, path, params, here } } } ) => `Nested: /${nested}/${path}/${params}/${here}/`
 }

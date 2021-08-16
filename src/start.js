@@ -16,7 +16,6 @@ module.exports = async function( config ) {
                 `Exception origin: ${origin}` )
         } )
 
-    serverConfig.init( config )
     log.gne( 'Starting Spliffy!' )
-    server.start()
+    server.start(serverConfig.init( config ))
 }

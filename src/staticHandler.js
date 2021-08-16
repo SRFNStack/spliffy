@@ -1,6 +1,5 @@
 const fs = require( 'fs' )
 const etag = require( 'etag' )
-const serverConfig = require( './serverConfig' )
 
 const readFile = async ( fullPath ) => await new Promise(
     ( resolve, reject ) =>
@@ -11,7 +10,7 @@ const readFile = async ( fullPath ) => await new Promise(
         )
 )
 
-const writeHeaders = ( req, res, tag, stat, contentType ) => {
+const writeHeaders = ( req, res, tag, stat, contentType, staticCacheControl ) => {
     if( req.headers['if-none-match'] === tag ) {
         res.statusCode = 304
         res.statusMessage = 'Not Modified'
@@ -20,7 +19,7 @@ const writeHeaders = ( req, res, tag, stat, contentType ) => {
     res.writeHead( 200, {
         'Content-Type': contentType,
         'Content-Length': stat.size,
-        'Cache-Control': serverConfig.current.staticCacheControl || 'max-age=600',
+        'Cache-Control': staticCacheControl || 'max-age=600',
         'ETag': tag
     } )
 }
@@ -31,11 +30,11 @@ const readStat = async path => new Promise( ( resolve, reject ) =>
     ) )
 
 module.exports = {
-    create: ( fullPath, contentType ) => {
+    create: ( fullPath, contentType, cacheStatic, staticCacheControl ) => {
         const cache = {}
         return {
             GET: async ( { req, res } ) => {
-                if( serverConfig.current.cacheStatic ) {
+                if( cacheStatic ) {
                     if( !cache.exists || !cache.stat ) {
                         cache.exists = fs.existsSync( fullPath )
                         if( cache.exists ) {
@@ -50,7 +49,7 @@ module.exports = {
                             statusMessage: 'Not Found'
                         }
                     }
-                    writeHeaders( req, res, cache.etag, cache.stat, contentType )
+                    writeHeaders( req, res, cache.etag, cache.stat, contentType, staticCacheControl )
                     if( res.statusCode === 304 ) {
                         return
                     }
@@ -63,11 +62,10 @@ module.exports = {
                         }
                     }
                     let stat = await readStat( fullPath )
-                    writeHeaders( req, res, etag( stat ), stat, contentType )
+                    writeHeaders( req, res, etag( stat ), stat, contentType, staticCacheControl )
                     if( res.statusCode === 304 ) {
                         return
                     }
-                    res.flushHeaders()
                     if( stat.size === 0 ) {
                         return ""
                     }
