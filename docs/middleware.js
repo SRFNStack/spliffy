@@ -11,7 +11,7 @@ export default div(
         'Middleware is a function that receives three arguments: ',code('request, response, next. ')
     ),
     p(
-        'The request and response are the verbatim nodejs objects and may be modified by middleware. '
+        'The request and response may be modified by middleware and do a lot of fun tricks. '
     ),
     p(
         'The next function, when called with no arguments, will continue to either the next middleware in the chain, or to the route handler if there is one.'
