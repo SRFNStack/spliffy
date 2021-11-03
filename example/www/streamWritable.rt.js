@@ -5,10 +5,9 @@ const catEatingPancakePath = require('path').join(__dirname,"../serverImages/cat
 
 module.exports = {
     GET: async ({res}) => {
-        res.setHeader('Content-Type', 'img/jpeg')
         res.assignHeaders({
             'Content-Type': 'img/jpeg',
-            'Content-Disposition': 'inline; filename="cat_eating_pancake.jpg'
+            'Content-Disposition': 'inline; filename="cat_eating_pancake.jpg"'
         })
         return pipeline(
             fs.createReadStream(catEatingPancakePath),

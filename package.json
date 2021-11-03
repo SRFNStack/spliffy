@@ -26,7 +26,7 @@
   "dependencies": {
     "cookie": "^0.4.0",
     "etag": "^1.8.1",
-    "uWebSockets.js": "uNetworking/uWebSockets.js#v19.3.0",
+    "uWebSockets.js": "uNetworking/uWebSockets.js#v20.4.0",
     "uuid": "^3.3.3"
   },
   "devDependencies": {
