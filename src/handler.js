@@ -36,7 +36,7 @@ const executeHandler = async ( url, res, req, body, handler, middleware, errorTr
                 res
             } )
         if( handled && typeof handled.then == 'function' ) {
-            await handled.then( ( h ) => finalizeResponse( req, res, h ) )
+            await handled.then( ( h ) => finalizeResponse( req, res, h, handler.statusCodeOverride ) )
                 .catch(
                     e => {
                         let refId = uuid()
@@ -89,21 +89,21 @@ const writeAccess = function( req, res ) {
     }
 }
 
-const finalizeResponse = ( req, res, handled ) => {
+const finalizeResponse = ( req, res, handled, statusCodeOverride ) => {
     if( !res.finalized ) {
         res.finalized = true
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
-            end( res, 200, 'OK' )
+            end( res, statusCodeOverride || 200, 'OK' )
         } else {
             //if the returned object has known fields, treat it as a response object instead of the body
             if( handled.body || handled.statusMessage || handled.statusCode || handled.headers ) {
                 if( handled.headers ) {
                     res.assignHeaders( handled.headers )
                 }
-                end( res, handled.statusCode || 200, handled.statusMessage || 'OK', handled.body )
+                end( res, statusCodeOverride || handled.statusCode || 200, handled.statusMessage || 'OK', handled.body )
             } else {
-                end( res, 200, 'OK', handled )
+                end( res, statusCodeOverride || 200, 'OK', handled )
             }
         }
     }
@@ -169,7 +169,6 @@ let currentDate = new Date().toUTCString()
 setInterval( () => currentDate = new Date().toUTCString(), 1000 )
 
 const handleRequest = async ( req, res, handler, middleware, errorTransformer ) => {
-    res.headers['server'] = 'uWebSockets.js'
     res.headers['date'] = currentDate
 
     try {
@@ -230,18 +229,21 @@ module.exports =
         },
         notFound: config => ( res, req ) => {
             try {
-                let params = config.defaultRoute && config.defaultRoute.pathParameters || []
+                let handler = config.defaultRouteHandler || config.notFoundRouteHandler
+                let params = handler && handler.pathParameters || []
                 req = decorateRequest( req, params, res, config );
                 res = decorateResponse( res, req, finalizeResponse );
                 if( config.logAccess ) {
                     res.onEnd = writeAccess( req, res )
                 }
-                if( config.defaultRoute && typeof config.defaultRoute ) {
-                    let route = config.defaultRoute
-                    if( route.handlers && route.handlers[req.method] ) {
+                if( handler && typeof handler === 'object' ) {
+                    if( handler.handlers && typeof handler.handlers[req.method] === 'function' ) {
+                        if( handler.hasOwnProperty( 'statusCodeOverride' ) ) {
+                            handler.handlers[req.method].statusCodeOverride = handler.statusCodeOverride
+                        }
                         handleRequest( req, res,
-                            config.defaultRoute.handlers[req.method],
-                            config.defaultRoute.middleware,
+                            handler.handlers[req.method],
+                            handler.middleware,
                             config.errorTransformer
                         )
                     } else {

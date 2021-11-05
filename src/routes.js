@@ -19,6 +19,8 @@ const getPathPart = name => {
         return name
     }
 }
+const filterTestFiles = config => f => (!f.name.endsWith('.test.js') && !f.name.endsWith('.test.js') ) || config.allowTestFileRoutes;
+const filterIgnoredFiles = config => f => !config.ignoreFilesMatching.find(f.name.match);
 const ignoreHandlerFields = { middleware: true, streamRequestBody: true }
 const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, inheritedMiddleware ) => {
     let routes = []
@@ -31,6 +33,7 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
 
         const dirMiddleware = files
             .filter( f => f.name.endsWith( '.mw.js' ) )
+            .filter( f => filterIgnoredFiles(config) )
             .map( f => {
                 let mw = require( filePath + '/' + f.name )
                 if( !mw.middleware ) {
@@ -44,6 +47,8 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
         routes = routes.concat( (
                 files
                     .filter( f => !f.name.endsWith( '.mw.js' ) )
+                    .filter( filterTestFiles(config) )
+                    .filter( filterIgnoredFiles(config) )
                     .map(
                         ( f ) => doFindRoutes(
                             config,
@@ -129,6 +134,8 @@ module.exports = {
         }
         let appMiddleware = mergeMiddleware( config.middleware || [], {} )
         return fs.readdirSync( fullRouteDir, { withFileTypes: true } )
+            .filter( filterTestFiles(config) )
+            .filter( filterIgnoredFiles(config) )
             .map(
                 f => doFindRoutes( config, f, fullRouteDir + '/' + f.name, '', [], appMiddleware )
             )

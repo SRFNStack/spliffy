@@ -18,7 +18,9 @@ const writeHeaders = ( req, res, tag, stat, contentType, staticCacheControl ) =>
     }
     res.writeHead( 200, {
         'Content-Type': contentType,
-        'Content-Length': stat.size,
+        // content-length should not be included because transfer-encoding is chunked
+        // see https://datatracker.ietf.org/doc/html/rfc2616#section-4.4 sub section 3.
+        // Not all clients are compliant (node-fetch) and throw instead of ignoring the header as specified
         'Cache-Control': staticCacheControl || 'max-age=600',
         'ETag': tag
     } )

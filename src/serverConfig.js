@@ -39,7 +39,7 @@ module.exports = {
         config.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
         config.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 
-        content.initContentHandlers(config.contentHandlers||{}, config.acceptsDefault)
+        content.initContentHandlers( config.contentHandlers || {}, config.acceptsDefault )
         config.resolveWithoutExtension = config.resolveWithoutExtension || []
         if( !Array.isArray( config.resolveWithoutExtension ) ) {
             config.resolveWithoutExtension = [config.resolveWithoutExtension]
@@ -62,6 +62,14 @@ module.exports = {
         log.setLogAccess( config.logAccess )
         if( config.hasOwnProperty( 'logLevel' ) ) {
             log.setLogLevel( config.logLevel )
+        }
+        if( !config.hasOwnProperty( 'ignoreFilesMatching' ) ) {
+            config.ignoreFilesMatching = []
+        } else if( !Array.isArray( config.ignoreFilesMatching ) ) {
+            config.ignoreFilesMatching = [config.ignoreFilesMatching]
+        }
+        if( !config.hasOwnProperty( 'allowTestFileRoutes' ) ) {
+            config.allowTestFileRoutes = false
         }
         config.port = config.port || 10420
         return config

@@ -2,7 +2,7 @@ const helmet = require( "helmet" );
 module.exports = ( ) =>
     ( {
         routeDir: __dirname + '/www',
-        port: 420,
+        port: 11420,
         staticContentTypes: {
             '.spliff': 'image/png'
         },

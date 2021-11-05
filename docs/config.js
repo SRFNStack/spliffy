@@ -5,14 +5,17 @@ export default div(
     p( 'These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.' ),
     prismCode( `{
     port: 10420,
-    routeDir: './www',
+    routeDir: __dirname + '/www',
     logLevel: 'INFO',
     logAccess: true,
     routePrefix: "api",
+    defaultRoute: "/app.js",
     notFoundRoute: "/404",
     acceptsDefault: "*/*",
     defaultContentType: "*/*",
     parseCookie: true,
+    ignoreFilesMatching: ['iHateThisFile.sux'],
+    allowTestFileRoutes: true,
     resolveWithoutExtension: ['.js'],
     errorTransformer: ( e, refId ) => e,
     contentHandlers: {
@@ -25,18 +28,6 @@ export default div(
         '.foo': 'application/foo'
     },
     staticCacheControl: "max-age=86400",
-    auth: {
-        appAllow: { users: ['Space Cowboy'], roles:['/secrets/.*': ['joker', 'mid-night toker'] ] },
-        matchAllow: [ {pattern: '/home', allow: { users: ['towelie'], roles: ['towel'] }} ],
-        authRequired: ['.*'],
-        noAuthRequired: ['/login', '/signup'],
-        jwt: {
-            issuer: "spliffy",
-            audience: "www.spliffy.dev",
-            signOpts: {},
-            verifyOpts: {}
-        }
-    },
     secure: {
         key: "/opt/certs/server.key",
         cert: "/opt/certs/server.cert",
@@ -55,14 +46,20 @@ export default div(
         li( strong( 'logAccess' ), ': Whether to log access to the server or not. Default true.' ),
         li( strong( 'routePrefix' ),
             ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo' ),
+        li( strong( 'defaultRoute' ),
+            ': The default route to return when the path is not found. Responds with a 200 status. Takes precedence over notFoundRoute. Used for single page apps.' ),
         li( strong( 'notFoundRoute' ),
-            ': The route to use for the not found page. This can also be used as a catchall for single page apps.' ),
+            ': The route to use for the not found page. Not used if defaultRoute is set. Responds with a 404 status code.' ),
         li( strong( 'acceptsDefault' ),
             ': The default mime type to use when accepting a request body. e({m},/) will convert objects from json by default' ),
         li( strong( 'defaultContentType' ),
             ': The default mime type to use when writing content to a response. will convert objects to json by default ' ),
         li( strong( 'parseCookie' ),
             ': Whether to parse cookies on the request' ),
+        li( strong( 'ignoreFilesMatching' ),
+            ': A list of file name patterns to ignore when searching for routes. Files ending in .test.js are always ignored unless allowTestRoutes is set to true.' ),
+        li( strong( 'allowTestFileRoutes' ),
+            ': Allow files ending with .test.js to be considered as routes.' ),
         li( strong( 'resolveWithoutExtension' ),
             ': Add extensions to this list to allow resolving files without their extension. For example, setting [\'.js\'] would cause /foo.js to also be routable as /foo' ),
         li( strong( 'errorTransformer' ),
@@ -87,32 +84,6 @@ export default div(
         li( strong( 'decodeQueryParameters' ),
             ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.' ),
         li( strong( 'cacheStatic' ), ': cache static files in memory to increase performance. false by default.' ),
-        li( strong( 'auth' ), ': Use authentication.',
-            ul(
-                li( strong( 'appAllow' ),
-                    ': Permissions that apply to all routes except those matched by noAuthRequired' ),
-                li( strong( 'matchAllow' ),
-                    ': Permissions that apply to routes that match the specified patterns, except those matched by noAuthRequired' ),
-                li( strong( 'authRequired' ),
-                    ': An array of regex path patterns that determine which routes require authentication' ),
-                li( strong( 'noAuthRequired' ),
-                    ': An array of regex path patterns that determine which routes DO NOT require authentication. This overrides all other settings.' ),
-                li( strong( 'jwt' ), ':',
-                    ul(
-                        li( strong( 'iss' ), ': The issuer to add as a claim to the jwt token' ),
-                        li( strong( 'aud' ), ': The audience to add as a claim to the jwt token' ),
-                        li( strong( 'signOpts' ), ': Opts to pass to ',
-                            a( { href: 'https://www.npmjs.com/package/jsonwebtoken#jwtsignpayload-secretorprivatekey-options-callback' },
-                               'jwt.sign()' )
-                        ),
-                        li( strong( 'verifyOpts' ), ': Opts to pass to ',
-                            a( { href: 'https://www.npmjs.com/package/jsonwebtoken#jwtverifytoken-secretorpublickey-options-callback' },
-                               'jwt.verify()' )
-                        )
-                    )
-                )
-            )
-        ),
         li( strong( 'secure' ), ': use https for all traffic. All traffic to the http port will be redirected to https' ),
         ul(
             li( strong( 'key' ), ': (Optional for manual config) The path to the key file to use for https' ),

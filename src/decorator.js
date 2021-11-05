@@ -128,10 +128,17 @@ module.exports = {
                     write: (chunk, encoding, cb) => {
                         try{
                             res.flushHeaders()
-                            res.write( chunk )
-                            cb()
+                            let result = res.write( chunk )
+                            if(typeof cb === 'function'){
+                                cb()
+                            }
+                            return result
                         } catch (e) {
-                            cb(e)
+                            if(typeof cb === 'function'){
+                                cb(e)
+                            } else {
+                                throw e
+                            }
                         }
                     }
                 } )
@@ -152,11 +159,11 @@ module.exports = {
             res.streaming = true
             res.flushHeaders()
             if( chunk instanceof Buffer ) {
-                res.writeArrayBuffer( toArrayBuffer( chunk ) )
+                return res.writeArrayBuffer( toArrayBuffer( chunk ) )
             } else if( typeof chunk === 'string' ) {
-                res.writeArrayBuffer( toArrayBuffer( Buffer.from( chunk, 'utf8' ) ) )
+                return res.writeArrayBuffer( toArrayBuffer( Buffer.from( chunk, 'utf8' ) ) )
             } else {
-                res.writeArrayBuffer( toArrayBuffer( Buffer.from( JSON.stringify( chunk ), 'utf8' ) ) )
+                return res.writeArrayBuffer( toArrayBuffer( Buffer.from( JSON.stringify( chunk ), 'utf8' ) ) )
             }
         }
 

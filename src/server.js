@@ -51,13 +51,20 @@ const start = config => {
             }
             let routePattern = `^${route.urlPath.replace( /:[^/]+/g, "[^/]+" ).replace( /\*/g, ".*" )}$`
             if( config.notFoundRoute && config.notFoundRoute.match( routePattern ) ) {
-                config.defaultRoute = route
+                config.notFoundRouteHandler = route
+                route.statusCodeOverride = 404
+            }
+            if( config.defaultRoute && config.defaultRoute.match( routePattern ) ) {
+                config.defaultRouteHandler = route
             }
             for( let method in route.handlers ) {
                 let theHandler = handler.create( route.handlers[method], route.middleware, route.pathParameters, config );
                 app[appMethods[method]]( route.urlPath, theHandler )
                 if( route.urlPath.endsWith( '/' ) && route.urlPath.length > 1 ) {
                     app[appMethods[method]]( route.urlPath.substr( 0, route.urlPath.length - 1 ), theHandler )
+                }
+                if( route.urlPath.endsWith( '/*') ) {
+                    app[appMethods[method]]( route.urlPath.substr( 0, route.urlPath.length - 2 ), theHandler )
                 }
             }
             if( !route.handlers.OPTIONS ) {
