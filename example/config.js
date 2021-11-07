@@ -7,6 +7,7 @@ module.exports = ( ) =>
             '.spliff': 'image/png'
         },
         logAccess: true,
+        ignoreFilesMatching: ['^ignore', 'cantLoadThis'],
         decodeQueryParameters: true,
         middleware: [
             ( req, res, next ) => {

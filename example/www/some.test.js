@@ -10,6 +10,12 @@ describe( "static js file, some.js", () => {
         expect(res.status).toEqual(200)
         expect(body).toEqual(expectedFile)
     } )
+    it( "resolves without .js extension", async () => {
+        let res = await fetch( "http://localhost:11420/some" );
+        const body = await res.text()
+        expect(res.status).toEqual(200)
+        expect(body).toEqual(expectedFile)
+    } )
     it("Should not make this test file into a route", async()=>{
         let res = await fetch( `http://localhost:11420/${__filename}` );
         const body = await res.text()

@@ -20,13 +20,17 @@ const appMethods = {
     CONNECT: 'connect',
     TRACE: 'trace'
 }
-const optionsHandler = methods => {
-    return () => ( {
+const optionsHandler = (config, methods) => {
+    return handler.create(() => ( {
         headers: {
             allow: methods,
         },
         statusCode: 204
-    } )
+    } ),
+        [],
+        [],
+        config
+    )
 };
 
 /**
@@ -68,13 +72,17 @@ const start = config => {
                 }
             }
             if( !route.handlers.OPTIONS ) {
-                app.options( route.urlPath, optionsHandler( Object.keys( route.handlers ).join( ', ' ) ) )
+                app.options( route.urlPath, optionsHandler( config, Object.keys( route.handlers ).join( ', ' ) ) )
             }
         }
 
-        if( config.notFoundRoute && !config.defaultRoute ) {
+        if( config.notFoundRoute && !config.notFoundRouteHandler ) {
+            log.warn( 'No route matched not found route: ' + config.notFoundRoute )
+        }
+        if( config.defaultRoute && !config.defaultRouteHandler ) {
             log.warn( 'No route matched default route: ' + config.notFoundRoute )
         }
+
         app.any( '/*', handler.notFound( config ) )
         app.listen( config.host || '0.0.0.0', config.port, ( token ) => {
             if( token ) {

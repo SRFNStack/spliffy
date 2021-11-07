@@ -19,8 +19,8 @@ const getPathPart = name => {
         return name
     }
 }
-const filterTestFiles = config => f => (!f.name.endsWith('.test.js') && !f.name.endsWith('.test.js') ) || config.allowTestFileRoutes;
-const filterIgnoredFiles = config => f => !config.ignoreFilesMatching.find(f.name.match);
+const filterTestFiles = config => f => ( !f.name.endsWith( '.test.js' ) && !f.name.endsWith( '.test.js' ) ) || config.allowTestFileRoutes;
+const filterIgnoredFiles = config => f => !config.ignoreFilesMatching.filter( p => p ).find( pattern => f.name.match( pattern ) );
 const ignoreHandlerFields = { middleware: true, streamRequestBody: true }
 const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, inheritedMiddleware ) => {
     let routes = []
@@ -33,11 +33,12 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
 
         const dirMiddleware = files
             .filter( f => f.name.endsWith( '.mw.js' ) )
-            .filter( f => filterIgnoredFiles(config) )
+            .filter( filterIgnoredFiles( config ) )
             .map( f => {
-                let mw = require( filePath + '/' + f.name )
+                let mwPath = path.join( filePath, f.name );
+                let mw = require( mwPath )
                 if( !mw.middleware ) {
-                    throw new Error( `${filePath + '/' + f.name} must export a middleware property` )
+                    throw new Error( `${mwPath} must export a middleware property` )
                 }
                 validateMiddleware( mw.middleware )
                 return mw.middleware
@@ -47,13 +48,13 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
         routes = routes.concat( (
                 files
                     .filter( f => !f.name.endsWith( '.mw.js' ) )
-                    .filter( filterTestFiles(config) )
-                    .filter( filterIgnoredFiles(config) )
+                    .filter( filterTestFiles( config ) )
+                    .filter( filterIgnoredFiles( config ) )
                     .map(
                         ( f ) => doFindRoutes(
                             config,
                             f,
-                            filePath + '/' + f.name,
+                            path.join( filePath, f.name ),
                             urlPath + '/' + getPathPart( name ),
                             pathParameters,
                             dirMiddleware
@@ -108,16 +109,19 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
             middleware: inheritedMiddleware
         }
 
-        if( !route.handlers.OPTIONS ) {
-
-        }
-
         routes.push( route )
 
         for( let ext of config.resolveWithoutExtension ) {
             if( name.endsWith( ext ) ) {
+                const strippedName = name.substr( 0, name.length - ext.length );
+                // in the index case we need to add both the stripped and an empty path so it will resolve the parent
+                if( strippedName === 'index' ) {
+                    let noExtRoute = Object.assign( {}, route )
+                    noExtRoute.urlPath = `${urlPath}/${strippedName}`
+                    routes.push( noExtRoute )
+                }
                 let noExtRoute = Object.assign( {}, route )
-                noExtRoute.urlPath = `${urlPath}/${getPathPart( name.substr( 0, name.length - ext.length ) )}`
+                noExtRoute.urlPath = `${urlPath}/${getPathPart( strippedName )}`
                 routes.push( noExtRoute )
             }
         }
@@ -127,15 +131,15 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
 
 
 module.exports = {
-    findRoutes(config) {
+    findRoutes( config ) {
         const fullRouteDir = path.resolve( config.routeDir )
         if( !fs.existsSync( fullRouteDir ) ) {
             throw `can't find route directory: ${fullRouteDir}`
         }
         let appMiddleware = mergeMiddleware( config.middleware || [], {} )
         return fs.readdirSync( fullRouteDir, { withFileTypes: true } )
-            .filter( filterTestFiles(config) )
-            .filter( filterIgnoredFiles(config) )
+            .filter( filterTestFiles( config ) )
+            .filter( filterIgnoredFiles( config ) )
             .map(
                 f => doFindRoutes( config, f, fullRouteDir + '/' + f.name, '', [], appMiddleware )
             )

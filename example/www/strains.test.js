@@ -43,7 +43,7 @@ describe( "catch all route, strains+.rt.js", () => {
         expect(res.headers.get('content-type')).toEqual('potato')
     } )
 
-    it( "Should respond to additional path segment", async () => {
+    it( "Should respond to path with lots of segments", async () => {
         let res = await fetch( "http://localhost:11420/strains/foo/bar/baz");
         let body = await res.json()
         expect(res.status).toEqual(200)
