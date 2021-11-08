@@ -12,7 +12,7 @@ module.exports = class extends NodeEnvironment {
         await super.setup()
         const self = this
         await new Promise( ( resolve, reject ) => {
-            const timeout = 30_000
+            const timeout = 5_000
             const rejectTimeout = setTimeout( () => {
                 reject( `Server was not initialized within ${timeout}ms` )
             }, timeout )
