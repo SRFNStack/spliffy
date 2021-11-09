@@ -40,7 +40,11 @@ const doFindRoutes = ( config, currentFile, filePath, urlPath, pathParameters, i
                 if( !mw.middleware ) {
                     throw new Error( `${mwPath} must export a middleware property` )
                 }
-                validateMiddleware( mw.middleware )
+                try {
+                    validateMiddleware( mw.middleware )
+                } catch( e ) {
+                    throw new Error( "Failed to load middleware in file " + mwPath + "\n" + e.message + '\n' + e.stack )
+                }
                 return mw.middleware
             } )
             .reduce( ( result, incoming ) => mergeMiddleware( incoming, result ), inheritedMiddleware )

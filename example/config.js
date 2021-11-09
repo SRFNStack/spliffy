@@ -11,6 +11,7 @@ module.exports = ( ) =>
         decodeQueryParameters: true,
         middleware: [
             ( req, res, next ) => {
+                res.headers['app-mw-applied'] = true
                 console.log( "Look at me! I'm in the middle!" )
                 next()
             },

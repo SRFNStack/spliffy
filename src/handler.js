@@ -160,7 +160,7 @@ async function tryExecuteMiddleware( middleware, req, res, e, errorTransformer, 
             await executeMiddleware( middlewarez, errorMiddleware, req, res )
     } catch( e ) {
         if( !refId ) refId = uuid()
-        console.log( 'Failed executing middleware while handling error: ' + e )
+        console.log( 'Failed executing middleware while handling error: ' + e + '\n' + e.stack )
         endError( res, e, refId, errorTransformer )
     }
 }
