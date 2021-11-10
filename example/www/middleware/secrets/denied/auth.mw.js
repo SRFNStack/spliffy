@@ -6,7 +6,8 @@ module.exports = {
                 next()
             } else {
                 console.log( 'Everyone is unauthorized!' )
-                next( { statusCode: 401, statusMessage: 'Get Outta Here!' } )
+                res.send({ statusCode: 401, statusMessage: 'Get Outta Here!' })
+                next()
             }
         } ]
     }

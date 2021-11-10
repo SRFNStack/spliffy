@@ -1,3 +1,6 @@
 module.exports = {
-    GET: ()=>"Can't get here"
+    GET: ({res})=>{
+        res.headers['route-was-hit'] = true
+        return "Can't get here"
+    }
 }
