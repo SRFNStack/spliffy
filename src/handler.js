@@ -91,7 +91,6 @@ const writeAccess = function( req, res ) {
 
 const finalizeResponse = ( req, res, handled, statusCodeOverride ) => {
     if( !res.finalized ) {
-        res.finalized = true
         if( !handled ) {
             //if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
             end( res, statusCodeOverride || 200, 'OK' )
@@ -106,6 +105,7 @@ const finalizeResponse = ( req, res, handled, statusCodeOverride ) => {
                 end( res, statusCodeOverride || 200, 'OK', handled )
             }
         }
+        res.finalized = true
     }
 }
 

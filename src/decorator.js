@@ -173,12 +173,12 @@ module.exports = {
             if( res.ended ) {
                 return
             }
-            res.ended = true
             //provide writableEnded like node does, with slightly different behavior
             if( !res.writableEnded ) {
-                res.writableEnded = true
                 res.flushHeaders()
                 uwsEnd.call( res, body )
+                res.writableEnded = true
+                res.ended = true
             }
             if( typeof res.onEnd === 'function' ) {
                 res.onEnd()
