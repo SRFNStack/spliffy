@@ -1,6 +1,6 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "author": "snowbldr",
   "private": false,
   "homepage": "https://github.com/narcolepticsnowman/spliffy",
@@ -16,7 +16,7 @@
     "url": "git@github.com:narcolepticsnowman/spliffy.git"
   },
   "scripts": {
-    "test": "npm run lint && jest",
+    "test": "npm run lint:fix && jest",
     "lint": "standard --env jest src ./*js && standard --env jest --env browser --global Prism docs example",
     "lint:fix": "standard --env jest --fix src ./*js && standard --env jest --env browser --global Prism --fix docs example"
   },

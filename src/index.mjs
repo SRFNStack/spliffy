@@ -1,3 +1,6 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
+
 /**
  * A helper for creating a redirect handler
  * @param location The location to redirect to
@@ -19,3 +22,10 @@ export { parseQuery, setMultiValueKey } from './url.mjs'
  * @returns {Promise<Server>} Either the https server if https is configured or the http server
  */
 export { default } from './start.mjs'
+
+/**
+ * Get the dirname for the given meta url
+ * @param metaUrl The import.meta.url value to get the dirname from
+ * @return {string} The full path to the directory the module is in
+ */
+export const moduleDirname = metaUrl => path.dirname(fileURLToPath(metaUrl))

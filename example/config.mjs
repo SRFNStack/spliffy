@@ -1,8 +1,8 @@
 import helmet from 'helmet'
+import { moduleDirname } from '../src/index.mjs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = moduleDirname(import.meta.url)
 
 export default () =>
   ({
