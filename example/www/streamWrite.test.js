@@ -39,13 +39,13 @@ const expectedHtml = '<html lang="en"><body>Particles<ul>' +
     '<li>zino</li>' +
     '</ul></body></html>'
 
-describe( "test write to response", () => {
-    it( "Should return all of the written chunks", async () => {
-        let res = await fetch( "http://localhost:11420/streamWrite");
-        let body = await res.text();
-        expect(res.status).toEqual(200)
-        expect(body).toEqual(expectedHtml)
-        expect(res.headers.get('transfer-encoding')).toEqual('chunked')
-        expect(res.headers.get('content-type')).toEqual('text/html')
-    } )
-} )
+describe('test write to response', () => {
+  it('Should return all of the written chunks', async () => {
+    const res = await fetch('http://localhost:11420/streamWrite')
+    const body = await res.text()
+    expect(res.status).toEqual(200)
+    expect(body).toEqual(expectedHtml)
+    expect(res.headers.get('transfer-encoding')).toEqual('chunked')
+    expect(res.headers.get('content-type')).toEqual('text/html')
+  })
+})

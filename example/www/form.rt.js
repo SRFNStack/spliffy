@@ -14,16 +14,16 @@ const form = htmlDoc(
 </form>`)
 
 module.exports = {
-    GET: () => ( {
-        headers: {
-            'Content-Type': 'text/html'
-        },
-        body: form
-    } ),
-    POST: ( { body: {name, favStrain, prefStyle}} ) => ({
-        headers: {
-            'Content-Type': 'text/html'
-        },
-        body: htmlDoc(`Hello ${name}, have some ${prefStyle} of ${favStrain}`)
-    })
+  GET: () => ({
+    headers: {
+      'Content-Type': 'text/html'
+    },
+    body: form
+  }),
+  POST: ({ body: { name, favStrain, prefStyle } }) => ({
+    headers: {
+      'Content-Type': 'text/html'
+    },
+    body: htmlDoc(`Hello ${name}, have some ${prefStyle} of ${favStrain}`)
+  })
 }

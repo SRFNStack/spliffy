@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ()=>"stuff"
+  GET: () => 'stuff'
 }

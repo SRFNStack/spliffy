@@ -1,1 +1,0 @@
-require( '../src/index' )( require( './config' )( process.argv[ 1 ] || 'dev' ) )

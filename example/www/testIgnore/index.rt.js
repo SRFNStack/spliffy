@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ()=> "This is ok though"
+  GET: () => 'This is ok though'
 }

@@ -1,3 +1,3 @@
-const { start } = require( "./testServer" );
+const { start } = require('./testServer')
 
 module.exports = start

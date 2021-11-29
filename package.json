@@ -1,6 +1,6 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "author": "snowbldr",
   "private": false,
   "homepage": "https://github.com/narcolepticsnowman/spliffy",
@@ -16,7 +16,9 @@
     "url": "git@github.com:narcolepticsnowman/spliffy.git"
   },
   "scripts": {
-    "test": "jest"
+    "test": "npm run lint && jest",
+    "lint": "standard --env jest src ./*js && standard --env jest --env browser --global Prism docs example",
+    "lint:fix": "standard --env jest --fix src ./*js && standard --env jest --env browser --global Prism --fix docs example"
   },
   "keywords": [
     "node",
@@ -27,12 +29,13 @@
     "rest"
   ],
   "dependencies": {
-    "cookie": "^0.4.0",
+    "cookie": "^0.4.1",
     "etag": "^1.8.1",
     "uWebSockets.js": "uNetworking/uWebSockets.js#v20.4.0",
-    "uuid": "^3.3.3"
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "standard": "^16.0.4",
     "helmet": "^4.6.0",
     "jest": "^27.3.1",
     "node-fetch": "^2.6.6"

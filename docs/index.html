@@ -19,32 +19,21 @@
 </head>
 <body>
 <script type="module">
-    //hack to make github pages route this app
-    import { secondaryColor } from './constants.js'
-    import { fnapp, goTo, routeSwitch } from './fntags.js'
-    import {
-        a,
-        blockquote,
-        code,
-        div,
-        em,
-        footer,
-        h1,
-        h2,
-        h3,
-        img,
-        li,
-        p,
-        pre,
-        strong,
-        style,
-        ul
-    } from './fnelements.js'
-    import { routeElements } from './routes.js'
-    import header from './header.js'
+  //hack to make github pages route this app
+  import { secondaryColor } from './constants.js'
+  import { goTo, routeSwitch } from './fnroute.mjs'
+  import {
+    a,
+    div,
+    footer,
+    img,
+    style,
+  } from './fnelements.mjs'
+  import { routeElements } from './routes.js'
+  import header from './header.js'
 
-    document.head.append( style(
-        `
+  document.head.append(style(
+    `
 .noselect {
             user-select: none;
         }
@@ -93,26 +82,26 @@
             cursor: pointer;
         }
 `
-    ) )
-    fnapp( document.body,
-           div( { style: 'margin: 0 auto; width: 100%; padding: 10px' },
-                header,
-                routeSwitch( ...routeElements() ),
-                footer( { style: 'margin-top: 100px; text-align: center; width: 100%;' },
-                        a( { href: 'https://github.com/narcolepticsnowman/spliffy' },
-                           img( { src: './GitHub_Logo.png' } ),
-                           img( { src: './GitHub-Mark-64px.png' } )
-                        ),
-                        div( 'Copyright © 2019 Robert Kempton' )
-                )
-           )
+  ))
+  document.body.append(
+    div({ style: 'margin: 0 auto; width: 100%; padding: 10px' },
+      header,
+      routeSwitch(...routeElements()),
+      footer({ style: 'margin-top: 100px; text-align: center; width: 100%;' },
+        a({ href: 'https://github.com/narcolepticsnowman/spliffy' },
+          img({ src: './GitHub_Logo.png' }),
+          img({ src: './GitHub-Mark-64px.png' })
+        ),
+        div('Copyright © 2019 Robert Kempton')
+      )
     )
-    if( sessionStorage.redirect ) {
-        setTimeout( () => {
-            goTo( sessionStorage.redirect.replace( location.pathname.split( /[#?]/ )[ 0 ], '' ) )
-            delete sessionStorage.redirect
-        }, 1 )
-    }
+  )
+  if (sessionStorage.redirect) {
+    setTimeout(() => {
+      goTo(sessionStorage.redirect.replace(location.pathname.split(/[#?]/)[0], ''))
+      delete sessionStorage.redirect
+    }, 1)
+  }
 </script>
 
 

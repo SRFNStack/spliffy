@@ -1,3 +1,3 @@
 module.exports = {
-    GET: ()=>"this isn't middleware"
+  GET: () => "this isn't middleware"
 }

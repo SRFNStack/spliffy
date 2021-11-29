@@ -1,3 +1,3 @@
 module.exports = {
-    GET(){throw new Error("Successfully Failed")}
+  GET () { throw new Error('Successfully Failed') }
 }
