@@ -27,11 +27,23 @@ export async function initConfig (userConfig) {
   const config = Object.assign({}, userConfig)
 
   if (!('decodePathParameters' in config)) {
-    config.decodePathParameters = true
+    config.decodePathParameters = false
+  }
+
+  if (!('decodeQueryParams' in config)) {
+    config.decodeQueryParams = false
+  }
+
+  if (!('extendIncomingMessage' in config)) {
+    config.extendIncomingMessage = false
   }
 
   if (!('parseCookie' in config)) {
-    config.parseCookie = true
+    config.parseCookie = false
+  }
+
+  if (!('writeDateHeader' in config)) {
+    config.writeDateHeader = false
   }
 
   config.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
@@ -55,7 +67,7 @@ export async function initConfig (userConfig) {
   }
 
   if (!('logAccess' in config)) {
-    config.logAccess = true
+    config.logAccess = false
   }
   if ('logLevel' in config) {
     log.setLogLevel(config.logLevel)

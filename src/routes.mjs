@@ -27,12 +27,16 @@ const getPathPart = name => {
 const filterTestFiles = config => f => (!f.name.endsWith('.test.js') && !f.name.endsWith('.test.mjs')) || config.allowTestFileRoutes
 const filterIgnoredFiles = config => f => !config.ignoreFilesMatching.filter(p => p).find(pattern => f.name.match(pattern))
 const ignoreHandlerFields = { middleware: true, streamRequestBody: true }
+
+const isRouteFile = name => name.endsWith('.rt.js') || name.endsWith('.rt.mjs') || name.endsWith('.rt.cjs')
+const isMiddlewareFile = name => name.endsWith('.mw.js') || name.endsWith('.mw.mjs') || name.endsWith('.mw.cjs')
+
 const doFindRoutes = async (config, currentFile, filePath, urlPath, pathParameters, inheritedMiddleware) => {
   const routes = []
   const name = currentFile.name
   if (currentFile.isDirectory()) {
     routes.push(...(await findRoutesInDir(name, filePath, urlPath, inheritedMiddleware, pathParameters, config)))
-  } else if (!config.staticMode && (name.endsWith('.rt.js') || name.endsWith('.rt.mjs'))) {
+  } else if (!config.staticMode && isRouteFile(name)) {
     routes.push(await buildJSHandlerRoute(name, filePath, urlPath, inheritedMiddleware, pathParameters))
   } else {
     routes.push(...buildStaticRoutes(name, filePath, urlPath, inheritedMiddleware, pathParameters, config))
@@ -55,9 +59,7 @@ const findRoutesInDir = async (name, filePath, urlPath, inheritedMiddleware, pat
   }
   const files = await readdir(filePath, { withFileTypes: true })
 
-  const middlewareModules = await importModules(config, filePath,
-    files.filter(f => f.name.endsWith('.mw.js') || f.name.endsWith('.mw.mjs'))
-  )
+  const middlewareModules = await importModules(config, filePath, files.filter(f => isMiddlewareFile(f.name)))
   const dirMiddleware = middlewareModules.map(({ module, mwPath }) => {
     const middleware = module.middleware || module.default?.middleware
     if (!middleware) {
@@ -73,7 +75,7 @@ const findRoutesInDir = async (name, filePath, urlPath, inheritedMiddleware, pat
     .reduce((result, incoming) => mergeMiddleware(incoming, result), inheritedMiddleware)
 
   return Promise.all(files
-    .filter(f => !f.name.endsWith('.mw.js') && !f.name.endsWith('.mw.mjs'))
+    .filter(f => !isMiddlewareFile(f.name))
     .filter(filterTestFiles(config))
     .filter(filterIgnoredFiles(config))
     .map(
@@ -90,7 +92,7 @@ const findRoutesInDir = async (name, filePath, urlPath, inheritedMiddleware, pat
 }
 
 const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware, pathParameters) => {
-  if (name.endsWith('.mjs')) {
+  if (name.endsWith('.mjs') || name.endsWith('.cjs')) {
     name = name.substr(0, name.length - '.rt.mjs'.length)
   } else {
     name = name.substr(0, name.length - '.rt.js'.length)

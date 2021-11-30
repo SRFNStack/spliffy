@@ -36,5 +36,6 @@ export default () =>
     logLevel: 'DEBUG',
     notFoundRoute: '/404.html',
     resolveWithoutExtension: '.js',
-    cacheStatic: false
+    cacheStatic: false,
+    parseCookie: true
   })

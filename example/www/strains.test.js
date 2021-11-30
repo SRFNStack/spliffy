@@ -8,7 +8,7 @@ describe('catch all route, strains+.rt.js', () => {
     expect(res.status).toEqual(200)
     expect(body).toEqual({
       path: '/strains',
-      query: {},
+      query: '',
       pathParameters: {}
     })
     expect(res.headers.get('content-type')).toEqual('potato')
@@ -49,7 +49,7 @@ describe('catch all route, strains+.rt.js', () => {
     expect(res.status).toEqual(200)
     expect(body).toEqual({
       path: '/strains/foo/bar/baz',
-      query: {},
+      query: '',
       pathParameters: {}
     })
     expect(res.headers.get('content-type')).toEqual('potato')

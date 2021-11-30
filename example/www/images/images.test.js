@@ -15,7 +15,6 @@ describe('custom mime type', () => {
     const res = await fetch('http://localhost:11420/images/taco.jaco')
     const body = await res.text()
     expect(res.status).toEqual(200)
-    expect(res.headers.get('content-type')).toEqual('text/plain')
     expect(body).toBe('got parameter taco.jaco')
   })
 })

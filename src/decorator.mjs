@@ -1,10 +1,11 @@
 import cookie from 'cookie'
 import http from 'http'
-import { parseQuery, setMultiValueKey } from './url.mjs'
+import { parseQuery } from './url.mjs'
 import log from './log.mjs'
 import { v4 as uuid } from 'uuid'
 import stream from 'stream'
 import httpStatusCodes, { defaultStatusMessages } from './httpStatusCodes.mjs'
+
 const { Writable } = stream
 
 const addressArrayBufferToString = addrBuf => String.fromCharCode.apply(null, new Int8Array(addrBuf))
@@ -26,40 +27,52 @@ export const setCookie = (res) => function () {
   return res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie') || []), cookie.serialize(...arguments)])
 }
 
-export function decorateRequest (uwsReq, pathParameters, res, { decodeQueryParameters, decodePathParameters, parseCookie } = {}) {
+export function decorateRequest (uwsReq, pathParameters, res, {
+  decodeQueryParameters,
+  decodePathParameters,
+  parseCookie,
+  extendIncomingMessage
+} = {}) {
   // uwsReq can't be used in async functions because it gets de-allocated when the handler function returns
   const req = {}
-  // frameworks like passport like to modify the message prototype
-  // Setting the prototype of req is not desirable because the entire api of IncomingMessage is not supported
-  for (const p of reqProtoProps()) {
-    if (!req[p]) req[p] = http.IncomingMessage.prototype[p]
+  if (extendIncomingMessage) {
+    // frameworks like passport like to modify the message prototype
+    // Setting the prototype of req is not desirable because the entire api of IncomingMessage is not supported
+    for (const p of reqProtoProps()) {
+      if (!req[p]) req[p] = http.IncomingMessage.prototype[p]
+    }
   }
   const query = uwsReq.getQuery()
   req.path = uwsReq.getUrl()
   req.url = `${req.path}${query ? '?' + query : ''}`
   req.spliffyUrl = {
-    path: uwsReq.getUrl(),
-    query: parseQuery(uwsReq.getQuery(), decodeQueryParameters)
+    path: req.path,
+    query: query && parseQuery(query, decodeQueryParameters),
+    pathParameters: {}
   }
-  req.spliffyUrl.pathParameters = {}
   if (pathParameters && pathParameters.length > 0) {
     for (const i in pathParameters) {
-      req.spliffyUrl.pathParameters[pathParameters[i]] = decodePathParameters
-        ? decodeURIComponent(uwsReq.getParameter(i))
-        : uwsReq.getParameter(i)
+      req.spliffyUrl.pathParameters[pathParameters[i]] =
+        decodePathParameters
+          ? decodeURIComponent(uwsReq.getParameter(i))
+          : uwsReq.getParameter(i)
     }
   }
   req.params = req.spliffyUrl.pathParameters
   req.headers = {}
+  uwsReq.forEach((header, value) => { req.headers[header] = value })
   req.method = uwsReq.getMethod().toUpperCase()
   req.remoteAddress = addressArrayBufferToString(res.getRemoteAddressAsText())
   req.proxiedRemoteAddress = addressArrayBufferToString(res.getProxiedRemoteAddressAsText())
-  uwsReq.forEach((header, value) => setMultiValueKey(req.headers, normalizeHeader(header), value))
-  req.get = header => req.headers[normalizeHeader(header)]
+  req.get = header => req.headers[header]
   if (parseCookie && req.headers.cookie) {
     req.cookies = cookie.parse(req.headers.cookie) || {}
   }
   return req
+}
+
+function toArrayBuffer (buffer) {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
 }
 
 export function decorateResponse (res, req, finalizeResponse, errorTransformer, endError, { acceptsDefault }) {
@@ -114,31 +127,37 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
     return this
   }
 
-  function toArrayBuffer (buffer) {
-    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  res.writeArrayBuffer = res.write
+  res.write = (chunk, encoding, cb) => {
+    try {
+      res.streaming = true
+      res.flushHeaders()
+      let result
+      if (chunk instanceof Buffer) {
+        result = res.writeArrayBuffer(toArrayBuffer(chunk))
+      } else if (typeof chunk === 'string') {
+        result = res.writeArrayBuffer(toArrayBuffer(Buffer.from(chunk, encoding || 'utf8')))
+      } else {
+        result = res.writeArrayBuffer(toArrayBuffer(Buffer.from(JSON.stringify(chunk), encoding || 'utf8')))
+      }
+      if (typeof cb === 'function') {
+        cb()
+      }
+      return result
+    } catch (e) {
+      if (typeof cb === 'function') {
+        cb(e)
+      } else {
+        throw e
+      }
+    }
   }
-
   let outStream
   res.getWritable = () => {
     if (!outStream) {
       res.streaming = true
       outStream = new Writable({
-        write: (chunk, encoding, cb) => {
-          try {
-            res.flushHeaders()
-            const result = res.write(chunk)
-            if (typeof cb === 'function') {
-              cb()
-            }
-            return result
-          } catch (e) {
-            if (typeof cb === 'function') {
-              cb(e)
-            } else {
-              throw e
-            }
-          }
-        }
+        write: res.write
       })
         .on('finish', res.end)
         .on('end', res.end)
@@ -151,18 +170,6 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
         })
     }
     return outStream
-  }
-  res.writeArrayBuffer = res.write
-  res.write = chunk => {
-    res.streaming = true
-    res.flushHeaders()
-    if (chunk instanceof Buffer) {
-      return res.writeArrayBuffer(toArrayBuffer(chunk))
-    } else if (typeof chunk === 'string') {
-      return res.writeArrayBuffer(toArrayBuffer(Buffer.from(chunk, 'utf8')))
-    } else {
-      return res.writeArrayBuffer(toArrayBuffer(Buffer.from(JSON.stringify(chunk), 'utf8')))
-    }
   }
 
   const uwsEnd = res.end

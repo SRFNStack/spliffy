@@ -2,13 +2,13 @@ import { a, div, li, p, strong, ul } from './fnelements.mjs'
 import prismCode from './prismCode.js'
 
 export default div(
-  p('These are all of the settings available and their defaults. You can include just the properties you want to change or all of them.'),
+  p('These are all of the settings available with example values. You can include just the properties you want to change or all of them.'),
   prismCode(`{
     port: 10420,
     httpsPort: 14420,
     httpsKeyFile: "/opt/certs/server.key",
     httpsCertFile: "/opt/certs/server.cert",
-    routeDir: __dirname + '/www',
+    routeDir: path.join(moduleDirname(import.meta.url), 'www'),
     logLevel: 'INFO',
     logAccess: true,
     logger: require('bunyan').createLogger({name: 'spliffy'}),
@@ -32,6 +32,8 @@ export default div(
         '.foo': 'application/foo'
     },
     staticCacheControl: "max-age=86400",
+    extendIncomingMessage: false,
+    writeDateHeader: false
 }
 `, null, '100%'
   ),
@@ -45,7 +47,7 @@ export default div(
       ': The level at which to log. One of ["ERROR","WARN","INFO","DEBUG"].',
       ' Default "INFO". You can use const {log} = require("spliffy") in your handlers'
     ),
-    li(strong('logAccess'), ': Whether to log access to the server or not. Default true.'),
+    li(strong('logAccess'), ': Whether to log access to the server or not. Default false.'),
     li(strong('logger'), ': A custom logger impl, logLevel and logAccess are ignored if this is provided.'),
     li(strong('routePrefix'),
       ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo'),
@@ -58,7 +60,7 @@ export default div(
     li(strong('defaultContentType'),
       ': The default mime type to use when writing content to a response. will convert objects to json by default '),
     li(strong('parseCookie'),
-      ': Whether to parse cookies on the request'),
+      ': Whether to parse cookies on the request, false by default'),
     li(strong('ignoreFilesMatching'),
       ': A list of file name patterns to ignore when searching for routes. Files ending in .test.js are always ignored unless allowTestRoutes is set to true.'),
     li(strong('allowTestFileRoutes'),
@@ -81,11 +83,13 @@ export default div(
     ),
     li(strong('staticCacheControl'), ': Custom value for the Cache-Control header of static files'),
     li(strong('decodePathParameters'),
-      ': run decodeURIComponent(param.replace(/+/g,"%20")) on each path parameter value. true by default.'),
+      ': run decodeURIComponent(param.replace(/+/g,"%20")) on each path parameter value. false by default.'),
     li(strong('staticMode'),
       ': if true, the server will only serve static content and will not execute js request handlers. '),
     li(strong('decodeQueryParameters'),
       ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.'),
-    li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.')
+    li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.'),
+    li(strong('extendIncomingMessage'), ': Apply the prototype of IncomingMessage to enable middleware that pollutes the prototype (like passportjs), default false.'),
+    li(strong('writeDateHeader'), ': write a Date header with the server time with ISO format, default false.')
   )
 )

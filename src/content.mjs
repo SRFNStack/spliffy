@@ -3,6 +3,7 @@ import { parseQuery } from './url.mjs'
 
 const defaultHandler = {
   deserialize: o => {
+    if (!o) return o
     try {
       return JSON.parse(o && o.toString())
     } catch (e) {
@@ -10,6 +11,7 @@ const defaultHandler = {
     }
   },
   serialize: o => {
+    if (!o) return { data: o }
     if (typeof o === 'string') {
       return {
         contentType: 'text/plain',
@@ -41,8 +43,8 @@ const toFormData = (key, value) => {
 
 const contentHandlers = {
   'application/json': {
-    deserialize: s => JSON.parse(s && s.toString()),
-    serialize: o => JSON.stringify(o)
+    deserialize: s => s && JSON.parse(s && s.toString()),
+    serialize: o => o && JSON.stringify(o)
   },
   'text/plain': {
     deserialize: s => s && s.toString(),
@@ -51,7 +53,7 @@ const contentHandlers = {
   'application/octet-stream': defaultHandler,
   'application/x-www-form-urlencoded': {
     deserialize: s => s && parseQuery(s.toString(), true),
-    serialize: o => Object.keys(o).map(toFormData).flat().join('&')
+    serialize: o => o && Object.keys(o).map(toFormData).flat().join('&')
   },
   '*/*': defaultHandler
 }

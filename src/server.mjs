@@ -21,14 +21,14 @@ const appMethods = {
   CONNECT: 'connect',
   TRACE: 'trace'
 }
-const optionsHandler = (config, methods) => {
+const optionsHandler = (config, middleware, methods) => {
   return createHandler(() => ({
     headers: {
       allow: methods
     },
     statusCode: 204
   }),
-  [],
+  middleware,
   [],
   config
   )
@@ -102,7 +102,7 @@ export async function startServer (config) {
         }
       }
       if (!route.handlers.OPTIONS) {
-        app.options(route.urlPath, optionsHandler(config, Object.keys(route.handlers).join(', ')))
+        app.options(route.urlPath, optionsHandler(config, route.middleware, Object.keys(route.handlers).join(', ')))
       }
     }
 

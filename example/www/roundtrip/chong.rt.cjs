@@ -1,5 +1,6 @@
 module.exports = {
-  POST: ({ url, body }) => {
+  POST: async ({ url, bodyPromise }) => {
+    const body = await bodyPromise
     if (typeof body !== 'object') {
       throw new Error('request body not parsed')
     }

@@ -31,7 +31,7 @@ require('spliffy')({
     a({ href: 'https://github.com/narcolepticsnowman/spliffy/tree/master/example' }, 'Examples')),
   h3({ id: 'js-request-handler' }, 'JS Request Handler'),
   pre(prismCode(`module.exports = {
-    GET: ({url, body, headers, req, res}) => {
+    GET: ({url, bodyPromise, headers, req, res}) => {
         body: "hello Mr. Marley"
     }
 }`
@@ -49,7 +49,7 @@ require('spliffy')({
           ': parameters that are part of the path. Not decoded by default. This can be configured by setting the decodePathParameters to true.')
       )
     ),
-    li(strong('body'), ': The body of the request'),
+    li(strong('bodyPromise'), ': A promise that resolves to the request body'),
     li(strong('headers'), ': The request headers'),
     li(strong('req'), ': A µWebSockets.js request adapted to function like an express request'),
     li(strong('res'), ': A µWebSockets.js response adapted to function like an express response')

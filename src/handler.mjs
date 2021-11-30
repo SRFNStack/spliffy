@@ -11,14 +11,18 @@ const { Readable } = stream
  * @param url The url being requested
  * @param res The uws response object
  * @param req The uws request object
- * @param body The request body
+ * @param bodyPromise The request body promise
  * @param handler The handler function for the route
  * @param middleware The middleware that applies to this request
  * @param errorTransformer An errorTransformer to convert error objects into response data
  */
-const executeHandler = async (url, res, req, body, handler, middleware, errorTransformer) => {
+const executeHandler = async (url, res, req, bodyPromise, handler, middleware, errorTransformer) => {
   try {
-    if (body) body = deserializeBody(body, req.headers['content-type'], res.acceptsDefault)
+    bodyPromise = bodyPromise.then(bodyContent => {
+      if (bodyContent instanceof Readable) return bodyContent
+      if (res.writableEnded) return
+      return deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
+    })
   } catch (e) {
     log.error('Failed to parse request.', e)
     end(res, 400, handler.statusCodeOverride)
@@ -26,7 +30,7 @@ const executeHandler = async (url, res, req, body, handler, middleware, errorTra
   }
 
   try {
-    const handled = await handler({ url, body, headers: req.headers, req, res })
+    const handled = await handler({ url, bodyPromise, headers: req.headers, req, res })
     finalizeResponse(req, res, handled, handler.statusCodeOverride)
   } catch (e) {
     const refId = uuid()
@@ -103,15 +107,10 @@ const pipeResponse = (res, readStream, errorTransformer) => {
 }
 
 const doSerializeBody = (body, res) => {
-  const contentType = res.getHeader('content-type')
-  if (typeof body === 'string') {
-    if (!contentType) {
-      res.headers['content-type'] = 'text/plain'
-    }
-    return body
-  } else if (body instanceof Readable) {
+  if (!body || typeof body === 'string' || body instanceof Readable) {
     return body
   }
+  const contentType = res.getHeader('content-type')
   const serialized = serializeBody(body, contentType, res.acceptsDefault)
 
   if (serialized?.contentType && !contentType) {
@@ -139,17 +138,12 @@ async function executeMiddleware (middleware, req, res, errorTransformer, refId,
   }
 }
 
-let currentDate = new Date().toUTCString()
-setInterval(() => { currentDate = new Date().toUTCString() }, 1000)
-
 const handleRequest = async (req, res, handler, middleware, errorTransformer) => {
-  res.headers.date = currentDate
-
   try {
     let reqBody
     if (!handler.streamRequestBody) {
       let buffer
-      reqBody = await new Promise(
+      reqBody = new Promise(
         resolve =>
           res.onData(async (data, isLast) => {
             if (isLast) {
@@ -160,18 +154,19 @@ const handleRequest = async (req, res, handler, middleware, errorTransformer) =>
           })
       )
     } else {
-      reqBody = new Readable({
+      const readable = new Readable({
         read: () => {
         }
       })
       res.onData(async (data, isLast) => {
         if (data.byteLength === 0 && !isLast) return
         // data must be copied so it isn't lost
-        reqBody.push(Buffer.concat([Buffer.from(data)]))
+        readable.push(Buffer.concat([Buffer.from(data)]))
         if (isLast) {
-          reqBody.push(null)
+          readable.push(null)
         }
       })
+      reqBody = Promise.resolve(readable)
     }
     await executeMiddleware(middleware, req, res, errorTransformer)
     if (!res.writableEnded && !res.ended) {
@@ -187,6 +182,9 @@ const handleRequest = async (req, res, handler, middleware, errorTransformer) =>
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
 
+let currentDate = new Date().toISOString()
+setInterval(() => { currentDate = new Date().toISOString() }, 1000)
+
 export const createHandler = (handler, middleware, pathParameters, config) => function (res, req) {
   try {
     req = decorateRequest(req, pathParameters, res, config)
@@ -195,10 +193,21 @@ export const createHandler = (handler, middleware, pathParameters, config) => fu
     if (config.logAccess) {
       res.onEnd = writeAccess(req, res)
     }
+
+    if (config.writeDateHeader) {
+      res.headers.date = currentDate
+    }
+
     handleRequest(req, res, handler, middleware, config.errorTransformer)
-      .catch(e => log.error('Failed handling request', e))
+      .catch(e => {
+        log.error('Failed handling request', e)
+        res.statusCode = 500
+        res.end()
+      })
   } catch (e) {
     log.error('Failed handling request', e)
+    res.statusCode = 500
+    res.end()
   }
 }
 
