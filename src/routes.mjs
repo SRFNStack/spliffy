@@ -51,6 +51,14 @@ const importModules = async (config, dirPath, files) => Promise.all(
     .map(f => path.join(dirPath, f.name))
     .map(mwPath => import(`file://${mwPath}`)
       .then(module => ({ module, mwPath }))
+      .catch(e => {
+        // Hack to workaround https://github.com/nodejs/modules/issues/471
+        if (e instanceof SyntaxError) {
+          const newError = new SyntaxError(`${e.message}. In file: ${mwPath}`)
+          newError.stack = e.stack
+          throw newError
+        }
+      })
     ))
 
 const findRoutesInDir = async (name, filePath, urlPath, inheritedMiddleware, pathParameters, config) => {
@@ -106,10 +114,25 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
     filePath,
     handlers: {}
   }
-  const module = await import(`file://${filePath}`)
+  let module
+  try {
+    module = await import(`file://${filePath}`)
+  } catch (e) {
+    // Hack to workaround https://github.com/nodejs/modules/issues/471
+    if (e instanceof SyntaxError) {
+      const newError = new SyntaxError(`${e.message}. In file: ${filePath}`)
+      newError.stack = e.stack
+      throw newError
+    }
+  }
   const handlers = module.default
-
-  route.middleware = mergeMiddleware(handlers.middleware || [], inheritedMiddleware)
+  try {
+    route.middleware = mergeMiddleware(handlers.middleware || [], inheritedMiddleware)
+  } catch (e) {
+    const err = new Error(`Failed to load middleware for route: ${filePath}`)
+    err.stack += `\nCaused By: ${e.stack}`
+    throw err
+  }
   for (const method of Object.keys(handlers).filter(k => !ignoreHandlerFields[k])) {
     if (HTTP_METHODS.indexOf(method) === -1) {
       throw new Error(`Method: ${method} in file ${filePath} is not a valid http method. It must be one of: ${HTTP_METHODS}. Method names must be all uppercase.`)

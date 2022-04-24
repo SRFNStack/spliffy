@@ -37,9 +37,7 @@ export const cloneMiddleware = (middleware) => {
  * @param middleware
  */
 export const validateMiddleware = (middleware) => {
-  if (Array.isArray(middleware)) {
-    validateMiddlewareArray(middleware)
-  } else if (typeof middleware === 'object') {
+  if (!Array.isArray(middleware) && typeof middleware === 'object') {
     for (const method in middleware) {
       // ensure methods are always available as uppercase
       const upMethod = method.toUpperCase()
@@ -47,7 +45,7 @@ export const validateMiddleware = (middleware) => {
       validateMiddlewareArray(middleware[upMethod])
     }
   } else {
-    throw new Error('Invalid middleware definition: ' + middleware)
+    validateMiddlewareArray(middleware)
   }
 }
 
