@@ -39,6 +39,6 @@
     "standard": "^16.0.4",
     "helmet": "^4.6.0",
     "jest": "^27.3.1",
-    "node-fetch": "^2.6.6"
+    "node-fetch": "^2.6.7"
   }
 }
