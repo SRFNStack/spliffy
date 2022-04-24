@@ -44,6 +44,16 @@ const doFindRoutes = async (config, currentFile, filePath, urlPath, pathParamete
   return routes
 }
 
+const wrapSyntaxError = (e, path) => {
+  // Hack to workaround https://github.com/nodejs/modules/issues/471
+  if (e instanceof SyntaxError) {
+    const newError = new SyntaxError(`${e.message}. In file: ${path}`)
+    newError.stack += `\nCaused By: ${e.stack}`
+    throw newError
+  }
+  throw e
+}
+
 const importModules = async (config, dirPath, files) => Promise.all(
   files
     .filter(filterTestFiles(config))
@@ -51,14 +61,7 @@ const importModules = async (config, dirPath, files) => Promise.all(
     .map(f => path.join(dirPath, f.name))
     .map(mwPath => import(`file://${mwPath}`)
       .then(module => ({ module, mwPath }))
-      .catch(e => {
-        // Hack to workaround https://github.com/nodejs/modules/issues/471
-        if (e instanceof SyntaxError) {
-          const newError = new SyntaxError(`${e.message}. In file: ${mwPath}`)
-          newError.stack = e.stack
-          throw newError
-        }
-      })
+      .catch(e => wrapSyntaxError(e, mwPath))
     ))
 
 const findRoutesInDir = async (name, filePath, urlPath, inheritedMiddleware, pathParameters, config) => {
@@ -118,12 +121,7 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
   try {
     module = await import(`file://${filePath}`)
   } catch (e) {
-    // Hack to workaround https://github.com/nodejs/modules/issues/471
-    if (e instanceof SyntaxError) {
-      const newError = new SyntaxError(`${e.message}. In file: ${filePath}`)
-      newError.stack = e.stack
-      throw newError
-    }
+    wrapSyntaxError(e, filePath)
   }
   const handlers = module.default
   try {
