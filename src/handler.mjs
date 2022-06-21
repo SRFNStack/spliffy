@@ -34,7 +34,6 @@ const executeHandler = async (url, res, req, bodyPromise, handler, middleware, e
     finalizeResponse(req, res, handled, handler.statusCodeOverride)
   } catch (e) {
     const refId = uuid()
-    log.error('handler failed', e, refId)
     await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
     endError(res, e, refId, errorTransformer)
   }
@@ -174,7 +173,6 @@ const handleRequest = async (req, res, handler, middleware, errorTransformer) =>
     }
   } catch (e) {
     const refId = uuid()
-    log.error('Handling request failed', e, refId)
     await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
     if (!res.writableEnded) { endError(res, e, refId, errorTransformer) }
   }
