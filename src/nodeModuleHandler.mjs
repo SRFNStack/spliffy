@@ -45,9 +45,9 @@ export function getNodeModuleRoutes (config) {
       }
 
       if (fs.existsSync(filePath)) {
-        if(nodeModuleRoutes.method === 'copy'){
-          let dest = path.join(config.routeDir, urlPath)
-          fs.mkdirSync(path.dirname(dest), {recursive: true})
+        if (nodeModuleRoutes.method === 'copy') {
+          const dest = path.join(config.routeDir, urlPath)
+          fs.mkdirSync(path.dirname(dest), { recursive: true })
           fs.copyFileSync(filePath, dest)
         } else {
           const parts = urlPath.split('/')
