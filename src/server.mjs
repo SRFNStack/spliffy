@@ -68,7 +68,7 @@ const getHttpsApp = (key, cert) => {
 export async function startServer (config) {
   if (!state.initialized) {
     state.initialized = true
-    const routes = [...(await findRoutes(config)), ...getNodeModuleRoutes(config)]
+    const routes = [ ...getNodeModuleRoutes(config), ...(await findRoutes(config)) ]
     let app, port
     if (config.httpsKeyFile) {
       app = getHttpsApp(config.secure)
