@@ -33,7 +33,8 @@ export default div(
     },
     staticCacheControl: "max-age=86400",
     extendIncomingMessage: false,
-    writeDateHeader: false
+    writeDateHeader: false,
+    autoOptions: false
 }
 `, null, '100%'
   ),
@@ -90,6 +91,7 @@ export default div(
       ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.'),
     li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.'),
     li(strong('extendIncomingMessage'), ': Apply the prototype of IncomingMessage to enable middleware that pollutes the prototype (like passportjs), default false.'),
-    li(strong('writeDateHeader'), ': write a Date header with the server time with ISO format, default false.')
+    li(strong('writeDateHeader'), ': write a Date header with the server time with ISO format, default false.'),
+    li(strong('autoOptions'), ': automatically generate options routes for every end point if not provided, default false.')
   )
 )

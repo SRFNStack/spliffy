@@ -101,7 +101,7 @@ export async function startServer (config) {
           app[appMethods[method]](route.urlPath.substr(0, route.urlPath.length - 2), theHandler)
         }
       }
-      if (!route.handlers.OPTIONS) {
+      if (config.autoOptions && !route.handlers.OPTIONS) {
         app.options(route.urlPath, optionsHandler(config, route.middleware, Object.keys(route.handlers).join(', ')))
       }
     }

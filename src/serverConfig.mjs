@@ -85,6 +85,10 @@ export async function initConfig (userConfig) {
     config.httpPort = config.port - 1
   }
 
+  if (!('autoOptions' in config)) {
+    config.autoOptions = false
+  }
+
   if (config.logger) {
     log.setLogger(config.logger)
   }

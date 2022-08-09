@@ -37,5 +37,6 @@ export default () =>
     notFoundRoute: '/404.html',
     resolveWithoutExtension: '.js',
     cacheStatic: false,
-    parseCookie: true
+    parseCookie: true,
+    autoOptions: true
   })
