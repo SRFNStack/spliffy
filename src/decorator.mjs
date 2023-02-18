@@ -65,8 +65,8 @@ export function decorateRequest (uwsReq, pathParameters, res, {
   req.remoteAddress = addressArrayBufferToString(res.getRemoteAddressAsText())
   req.proxiedRemoteAddress = addressArrayBufferToString(res.getProxiedRemoteAddressAsText())
   req.get = header => req.headers[header]
-  if (parseCookie && req.headers.cookie) {
-    req.cookies = cookie.parse(req.headers.cookie) || {}
+  if (parseCookie) {
+    req.cookies = (req.headers.cookie && cookie.parse(req.headers.cookie)) || {}
   }
   return req
 }
