@@ -6,7 +6,7 @@ const expectedCheech = fs.readFileSync(path.join(__dirname, 'cheech.html')).toSt
 const expectedCheechFun = fs.readFileSync(path.join(__dirname, 'cheechFun.js')).toString('utf-8')
 describe('roundtrip test', () => {
   it('Loads the html from /roundTrip/cheech', async () => {
-    const res = await fetch('http://localhost:11420/roundtrip/cheech')
+    const res = await fetch('http://127.0.0.1:11420/roundtrip/cheech')
     const cheech = await res.text()
     expect(res.status).toBe(200)
     expect(res.headers.get('transfer-encoding')).toBe('chunked')
@@ -14,7 +14,7 @@ describe('roundtrip test', () => {
   })
 
   it('Loads the js from /roundTrip/cheechFun', async () => {
-    const res = await fetch('http://localhost:11420/roundtrip/cheechFun')
+    const res = await fetch('http://127.0.0.1:11420/roundtrip/cheechFun')
     const cheechFun = await res.text()
     expect(res.status).toBe(200)
     expect(res.headers.get('transfer-encoding')).toBe('chunked')
@@ -29,7 +29,7 @@ describe('roundtrip test', () => {
         }
       }
     }
-    const res = await fetch(`http://localhost:11420/roundtrip/chong?q=${encodeURIComponent('Hey man, am I driving ok?')}`, {
+    const res = await fetch(`http://127.0.0.1:11420/roundtrip/chong?q=${encodeURIComponent('Hey man, am I driving ok?')}`, {
       method: 'POST',
       body: JSON.stringify(input),
       headers: {

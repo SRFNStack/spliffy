@@ -25,7 +25,7 @@ require('spliffy')({
   p('routeDir is the only required property and should be an absolute path.'),
   p('10420 is the default port for http, and can be changed by setting the port in the config'),
   p('start the server', prismCode('node ~/app/serve.js')),
-  p('Go to ', prismCode('localhost:10420/spliffy')),
+  p('Go to ', prismCode('127.0.0.1:10420/spliffy')),
 
   h3({ id: '-examples-https-github-com-narcolepticsnowman-spliffy-tree-master-example-' },
     a({ href: 'https://github.com/narcolepticsnowman/spliffy/tree/master/example' }, 'Examples')),

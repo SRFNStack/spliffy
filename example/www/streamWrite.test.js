@@ -41,7 +41,7 @@ const expectedHtml = '<html lang="en"><body>Particles<ul>' +
 
 describe('test write to response', () => {
   it('Should return all of the written chunks', async () => {
-    const res = await fetch('http://localhost:11420/streamWrite')
+    const res = await fetch('http://127.0.0.1:11420/streamWrite')
     const body = await res.text()
     expect(res.status).toEqual(200)
     expect(body).toEqual(expectedHtml)

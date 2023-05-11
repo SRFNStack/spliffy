@@ -36,7 +36,7 @@ routeDir is the only required property and should be an absolute path.
 start the server
 `node ~/app/serve.js`
 
-Go to `localhost:10420/spliffy`
+Go to `127.0.0.1:10420/spliffy`
 
 # [Documentation](https://srfnstack.github.io/spliffy/)
 

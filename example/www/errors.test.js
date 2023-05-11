@@ -26,7 +26,7 @@ const expectations = [
 describe('errors!', () => {
   it('sets the status code, status message, and body from the error', async () => {
     for (const expectation of expectations) {
-      const res = await fetch(`http://localhost:11420/errors?statusCode=${expectation.statusCode}`)
+      const res = await fetch(`http://127.0.0.1:11420/errors?statusCode=${expectation.statusCode}`)
       const body = await res.json()
       expect(res.status).toBe(parseInt(expectation.statusCode))
       expect(res.statusText).toBe(expectation.statusMessage)

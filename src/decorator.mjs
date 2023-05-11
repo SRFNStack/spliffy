@@ -47,7 +47,7 @@ export function decorateRequest (uwsReq, pathParameters, res, {
   req.url = `${req.path}${query ? '?' + query : ''}`
   req.spliffyUrl = {
     path: req.path,
-    query: query && parseQuery(query, decodeQueryParameters),
+    query: (query && parseQuery(query, decodeQueryParameters)) || {},
     pathParameters: {}
   }
   if (pathParameters && pathParameters.length > 0) {

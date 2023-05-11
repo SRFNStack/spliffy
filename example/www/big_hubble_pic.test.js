@@ -15,7 +15,7 @@ function md5 (buffer) {
 
 describe('large static file', () => {
   it('should load the entire contents correctly', async () => {
-    const res = await fetch('http://localhost:11420/big_hubble_pic.tif')
+    const res = await fetch('http://127.0.0.1:11420/big_hubble_pic.tif')
     const body = await res.buffer()
     expect(res.headers.get('content-type')).toEqual('image/tiff')
     expect(body.equals(expectedFile)).toBe(true)
