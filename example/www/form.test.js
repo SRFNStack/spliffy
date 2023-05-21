@@ -13,14 +13,14 @@ const expectedForm = `<html><body><form method="post">
 
 describe('form test', () => {
   it('Loads the html from /form', async () => {
-    const res = await fetch('http://127.0.0.1:11420/form')
+    const res = await fetch('http://localhost:11420/form')
     const form = await res.text()
     expect(res.status).toBe(200)
     expect(form).toEqual(expectedForm)
   })
 
   it('Form consumes url encoded data and returns expected html', async () => {
-    const res = await fetch('http://127.0.0.1:11420/form', {
+    const res = await fetch('http://localhost:11420/form', {
       method: 'POST',
       body: 'name=Jerry&favStrain=Bruce%20Banner&prefStyle=bud',
       headers: {

@@ -114,7 +114,7 @@ export async function startServer (config) {
     }
 
     app.any('/*', createNotFoundHandler(config))
-    app.listen(config.host || '0.0.0.0', config.port, (token) => {
+    app.listen(config.host || '::', config.port, (token) => {
       if (token) {
         log.gne(`Server initialized at ${new Date().toISOString()} and listening on port ${port}`)
       } else {

@@ -3,7 +3,7 @@ const fetch = require('node-fetch')
 
 describe('catch all route, strains+.rt.js', () => {
   it('Should match strains without anything extra', async () => {
-    const res = await fetch('http://127.0.0.1:11420/strains')
+    const res = await fetch('http://localhost:11420/strains')
     const body = await res.json()
     expect(res.status).toEqual(200)
     expect(body).toEqual({
@@ -15,7 +15,7 @@ describe('catch all route, strains+.rt.js', () => {
   })
 
   it('Should parse query params', async () => {
-    const res = await fetch('http://127.0.0.1:11420/strains?foo=bar%20baz&baz=foo&baz=bar&baz=baz')
+    const res = await fetch('http://localhost:11420/strains?foo=bar%20baz&baz=foo&baz=bar&baz=baz')
     const body = await res.json()
     expect(res.status).toEqual(200)
     expect(body).toEqual({
@@ -30,7 +30,7 @@ describe('catch all route, strains+.rt.js', () => {
   })
 
   it('Should respond to additional path segment', async () => {
-    const res = await fetch('http://127.0.0.1:11420/strains/gorillaGlue?isGood=true')
+    const res = await fetch('http://localhost:11420/strains/gorillaGlue?isGood=true')
     const body = await res.json()
     expect(res.status).toEqual(200)
     expect(body).toEqual({
@@ -44,7 +44,7 @@ describe('catch all route, strains+.rt.js', () => {
   })
 
   it('Should respond to path with lots of segments', async () => {
-    const res = await fetch('http://127.0.0.1:11420/strains/foo/bar/baz')
+    const res = await fetch('http://localhost:11420/strains/foo/bar/baz')
     const body = await res.json()
     expect(res.status).toEqual(200)
     expect(body).toEqual({

@@ -20,7 +20,7 @@ afterEach(() => {
 })
 describe('streaming request body', () => {
   it('receives and stores the whole file correctly', async () => {
-    const res = await fetch('http://127.0.0.1:11420/streamRequest?filename=hubble.tif', {
+    const res = await fetch('http://localhost:11420/streamRequest?filename=hubble.tif', {
       method: 'POST',
       body: expectedFile
     })

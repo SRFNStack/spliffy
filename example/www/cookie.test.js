@@ -2,7 +2,7 @@ const fetch = require('node-fetch')
 
 describe('cookies!', () => {
   it('loves cookies', async () => {
-    const res = await fetch('http://127.0.0.1:11420/cookie', {
+    const res = await fetch('http://localhost:11420/cookie', {
       headers: {
         cookie: 'username=cookiezzz; giveme=cookies;'
       }
