@@ -59,6 +59,7 @@ export function decorateRequest (uwsReq, pathParameters, res, {
     }
   }
   req.params = req.spliffyUrl.pathParameters
+  req.query = req.spliffyUrl.query
   req.headers = {}
   uwsReq.forEach((header, value) => { req.headers[header] = value })
   req.method = uwsReq.getMethod().toUpperCase()
