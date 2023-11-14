@@ -50,6 +50,7 @@ export const validateMiddleware = (middleware) => {
 }
 
 export const validateMiddlewareArray = (arr) => {
+  if (!arr) return
   if (!Array.isArray(arr)) {
     throw new Error('middleware must be an array of functions')
   }

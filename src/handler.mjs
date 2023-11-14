@@ -56,7 +56,6 @@ const end = (res, defaultStatusCode, statusCodeOverride, body) => {
   if (body instanceof Readable || res.streaming) {
     res.streaming = true
     if (body instanceof Readable) {
-      res.flushHeaders()
       pipeResponse(res, body)
     }
     // handler is responsible for ending the response if they are streaming
@@ -65,10 +64,14 @@ const end = (res, defaultStatusCode, statusCodeOverride, body) => {
   }
 }
 
+const ipv6CompressRegex = /\b:?(?:0+:?){2,}/g
+
+const compressIpv6 = ip => ip && ip.includes(':') ? ip.replaceAll(ipv6CompressRegex, '::') : ip
+
 const writeAccess = function (req, res) {
   const start = new Date().getTime()
   return () => {
-    log.access(req.remoteAddress, res.proxiedRemoteAddress || '', res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms')
+    log.access(compressIpv6(req.remoteAddress), compressIpv6(res.proxiedRemoteAddress) || '', res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms')
   }
 }
 
