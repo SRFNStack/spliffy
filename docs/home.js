@@ -45,8 +45,8 @@ require('spliffy')({
         li(strong('path'), ': The path of the current request'),
         li(strong('query'),
           ': An object containing the query parameters. Not decoded by default. This can be configured by setting the decodeQueryParameters to true.'),
-        li(strong('pathParameters'),
-          ': parameters that are part of the path. Not decoded by default. This can be configured by setting the decodePathParameters to true.')
+        li(strong('param'),
+          ': a function to retrieve a path parameter by name. Not decoded by default. This can be configured by setting the decodePathParameters to true.')
       )
     ),
     li(strong('bodyPromise'), ': A promise that resolves to the request body'),

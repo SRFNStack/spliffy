@@ -63,8 +63,8 @@ module.exports = {
             res.statusMessage = 'Forbidden'
             res.end()
         }],
-    POST: async ( { req: { user }, url: { pathParameters: { adminStuffId } } } ) => 
-        await doAdminStuff(user, adminStuffId)
+    POST: async ( { req: { user }, url: { param } } ) => 
+        await doAdminStuff(user, param('adminStuffId'))
 }
 `
   ),

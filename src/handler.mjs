@@ -47,7 +47,11 @@ const endError = (res, e, refId, errorTransformer) => {
     e = errorTransformer(e, refId)
   }
   res.headers['x-ref-id'] = refId
-  end(res, e.statusCode || 500, null, e.body || '')
+  const status = e.statusCode || 500
+  if (status === 500) {
+    log.error(e)
+  }
+  end(res, status, null, e.body || '')
 }
 
 const end = (res, defaultStatusCode, statusCodeOverride, body) => {
@@ -236,7 +240,7 @@ export const createNotFoundHandler = config => {
             res.statusCode = 500
           })
         } else {
-          res.statusCode = 405
+          res.statusCode = 404
           res.end()
         }
       } else {

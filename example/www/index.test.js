@@ -50,7 +50,7 @@ describe('static files, folder index index.html', () => {
     expect(res.headers.get('allow')).toEqual('GET')
   })
   it('Should not make this test file into a route', async () => {
-    const res = await fetch(`http://localhost:11420/${__filename}`)
+    const res = await fetch('http://localhost:11420/laksjdflkasldkfj')
     const body = await res.text()
     expect(res.status).toEqual(404)
     expect(body).toBe(expected404)

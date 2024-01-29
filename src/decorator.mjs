@@ -45,20 +45,15 @@ export function decorateRequest (uwsReq, pathParameters, res, {
   const query = uwsReq.getQuery()
   req.path = uwsReq.getUrl()
   req.url = `${req.path}${query ? '?' + query : ''}`
+  const paramToIndex = pathParameters.reduce((acc, cur, i) => {
+    acc[cur] = i
+    return acc
+  }, {})
   req.spliffyUrl = {
     path: req.path,
     query: (query && parseQuery(query, decodeQueryParameters)) || {},
-    pathParameters: {}
+    param: name => uwsReq.getParameter(paramToIndex[name])
   }
-  if (pathParameters && pathParameters.length > 0) {
-    for (const i in pathParameters) {
-      req.spliffyUrl.pathParameters[pathParameters[i]] =
-        decodePathParameters
-          ? decodeURIComponent(uwsReq.getParameter(i))
-          : uwsReq.getParameter(i)
-    }
-  }
-  req.params = req.spliffyUrl.pathParameters
   req.query = req.spliffyUrl.query
   req.headers = {}
   uwsReq.forEach((header, value) => { req.headers[header] = value })

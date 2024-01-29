@@ -39,7 +39,7 @@ const startHttpRedirect = (host, port) => {
   uws.App().any('/*',
     (req, res) => {
       try {
-        res.writeHead(301, { Location: `https://${req.headers.host}:${port}${req.url}` })
+        res.writeHead(301, { Location: `https://${req.headers.get('host')}:${port}${req.url}` })
         res.end()
       } catch (e) {
         log.error(`Failed to handle http request on port ${port}`, req.url, e)
@@ -91,18 +91,27 @@ export async function startServer (config) {
       if (config.defaultRoute && config.defaultRoute.match(routePattern)) {
         config.defaultRouteHandler = route
       }
+      let hadSlash = false
+      if (route.urlPath.endsWith('/')) {
+        hadSlash = true
+        route.urlPath = route.urlPath.substring(0, route.urlPath.length - 1)
+      }
       for (const method in route.handlers) {
         const theHandler = createHandler(route.handlers[method], route.middleware, route.pathParameters, config)
         app[appMethods[method]](route.urlPath, theHandler)
-        if (route.urlPath.endsWith('/') && route.urlPath.length > 1) {
-          app[appMethods[method]](route.urlPath.substr(0, route.urlPath.length - 1), theHandler)
+        if (hadSlash && config.serveRoutesWithSlash) {
+          app[appMethods[method]](route.urlPath + '/', theHandler)
         }
         if (route.urlPath.endsWith('/*')) {
           app[appMethods[method]](route.urlPath.substr(0, route.urlPath.length - 2), theHandler)
         }
       }
       if (config.autoOptions && !route.handlers.OPTIONS) {
-        app.options(route.urlPath, optionsHandler(config, route.middleware, Object.keys(route.handlers).join(', ')))
+        const theHandler = optionsHandler(config, route.middleware, Object.keys(route.handlers).join(', '))
+        app.options(route.urlPath, theHandler)
+        if (hadSlash && config.serveRoutesWithSlash) {
+          app.options(route.urlPath + '/', theHandler)
+        }
       }
     }
 

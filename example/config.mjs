@@ -38,5 +38,6 @@ export default () =>
     resolveWithoutExtension: '.js',
     cacheStatic: false,
     parseCookie: true,
-    autoOptions: true
+    autoOptions: true,
+    serveRoutesWithSlash: true
   })

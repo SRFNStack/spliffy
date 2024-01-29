@@ -1,6 +1,5 @@
 const path = require('path')
 const childProcess = require('child_process')
-
 let server
 
 module.exports = {
@@ -29,7 +28,8 @@ module.exports = {
       console.log(data)
       if (data.match('Server initialized')) {
         clearTimeout(rejectTimeout)
-        resolve()
+        // give it a little extra time to initialize
+        setTimeout(resolve, 250)
       }
     })
     server.stderr.setEncoding('utf-8')

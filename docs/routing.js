@@ -60,7 +60,7 @@ export default div(
     li('/www/strains/gorillaGlue/info'),
     li('/www/strains/blueDream/info')
   ),
-  p('The path parameters are available in the ', strong('pathParameters'), ' object on the first argument passed to the handler'),
+  p('The path parameters are available via the ', strong('param'), ' object on the first argument passed to the handler, pass in the name to get the value'),
   p('The variable will be the folder or file name excluding the $, i.e. $strainName -> { strainName: "gorillaGlue"}'),
   p('**You can only have on variable file/folder within any given folder. This is because it would be ambiguous which one to use and thus the result couldn\'t be defined. '),
 
