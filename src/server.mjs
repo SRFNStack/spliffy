@@ -92,7 +92,7 @@ export async function startServer (config) {
         config.defaultRouteHandler = route
       }
       let hadSlash = false
-      if (route.urlPath.endsWith('/')) {
+      if (route.urlPath.endsWith('/') && route.urlPath.length > 1) {
         hadSlash = true
         route.urlPath = route.urlPath.substring(0, route.urlPath.length - 1)
       }
