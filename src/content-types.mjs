@@ -26,6 +26,7 @@ export default {
   '.js': 'text/javascript',
   '.json': 'application/json',
   '.jsonld': 'application/ld+json',
+  '.map': 'application/json',
   '.mid': 'audio/midi',
   '.midi': 'audio/x-midi',
   '.mjs': 'text/javascript',
