@@ -1,9 +1,9 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "author": "snowbldr",
   "private": false,
-  "homepage": "https://github.com/narcolepticsnowman/spliffy",
+  "homepage": "https://github.com/SRFNStack/spliffy",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -14,7 +14,7 @@
   "main": "src/index.mjs",
   "repository": {
     "type": "git",
-    "url": "git@github.com:narcolepticsnowman/spliffy.git"
+    "url": "git@github.com:SRFNStack/spliffy.git"
   },
   "scripts": {
     "test": "npm run lint:fix && jest",
