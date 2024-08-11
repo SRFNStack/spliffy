@@ -19,18 +19,19 @@ const appMethods = {
   OPTIONS: 'options',
   HEAD: 'head',
   CONNECT: 'connect',
-  TRACE: 'trace'
+  TRACE: 'trace',
+  WEBSOCKET: 'ws'
 }
 const optionsHandler = (config, middleware, methods) => {
-  return createHandler(() => ({
-    headers: {
-      allow: methods
-    },
-    statusCode: 204
-  }),
-  middleware,
-  [],
-  config
+  return createHandler(() => ( {
+      headers: {
+        allow: methods
+      },
+      statusCode: 204
+    } ),
+    middleware,
+    [],
+    config
   )
 }
 
@@ -68,7 +69,7 @@ const getHttpsApp = (key, cert) => {
 export async function startServer (config) {
   if (!state.initialized) {
     state.initialized = true
-    const routes = [...getNodeModuleRoutes(config), ...(await findRoutes(config))]
+    const routes = [...getNodeModuleRoutes(config), ...( await findRoutes(config) )]
     let app, port
     if (config.httpsKeyFile) {
       app = getHttpsApp(config.secure)
@@ -97,7 +98,12 @@ export async function startServer (config) {
         route.urlPath = route.urlPath.substring(0, route.urlPath.length - 1)
       }
       for (const method in route.handlers) {
-        const theHandler = createHandler(route.handlers[method], route.middleware, route.pathParameters, config)
+        let theHandler = null
+        if (method === 'WEBSOCKET') {
+          theHandler = route.handlers[method]
+        } else {
+          theHandler = createHandler(route.handlers[method], route.middleware, route.pathParameters, config)
+        }
         app[appMethods[method]](route.urlPath, theHandler)
         if (hadSlash && config.serveRoutesWithSlash) {
           app[appMethods[method]](route.urlPath + '/', theHandler)

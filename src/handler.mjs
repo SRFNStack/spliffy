@@ -185,7 +185,7 @@ const handleRequest = async (req, res, handler, middleware, errorTransformer) =>
   }
 }
 
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE']
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE', 'WEBSOCKET']
 
 let currentDate = new Date().toISOString()
 setInterval(() => { currentDate = new Date().toISOString() }, 1000)
