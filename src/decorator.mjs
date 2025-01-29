@@ -92,21 +92,19 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
     if (!res.statusCode) res.statusCode = httpStatusCodes.OK
     if (!res.statusMessage) res.statusMessage = defaultStatusMessages[res.statusCode]
     res.headersSent = true
-    res.cork(() => {
-      res.writeStatus(`${res.statusCode} ${res.statusMessage}`)
-      if (typeof res.onFlushHeaders === 'function') {
-        res.onFlushHeaders(res)
-      }
-      for (const header of Object.keys(res.headers)) {
-        if (Array.isArray(res.headers[header])) {
-          for (const multiple of res.headers[header]) {
-            res.writeHeader(header, multiple.toString())
-          }
-        } else {
-          res.writeHeader(header, res.headers[header].toString())
+    res.writeStatus(`${res.statusCode} ${res.statusMessage}`)
+    if (typeof res.onFlushHeaders === 'function') {
+      res.onFlushHeaders(res)
+    }
+    for (const header of Object.keys(res.headers)) {
+      if (Array.isArray(res.headers[header])) {
+        for (const multiple of res.headers[header]) {
+          res.writeHeader(header, multiple.toString())
         }
+      } else {
+        res.writeHeader(header, res.headers[header].toString())
       }
-    })
+    }
   }
   res.writeHead = (status, headers) => {
     res.statusCode = status
@@ -128,23 +126,20 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
   res.uwsWrite = res.write
   res.write = (chunk, encoding, cb) => {
     try {
-      let result
-      res.cork(() => {
-        res.streaming = true
-        res.flushHeaders()
-        let data
-        if (chunk instanceof Buffer) {
-          data = toArrayBuffer(chunk)
-        } else if (typeof chunk === 'string') {
-          data = toArrayBuffer(Buffer.from(chunk, encoding || 'utf8'))
-        } else {
-          data = toArrayBuffer(Buffer.from(JSON.stringify(chunk), encoding || 'utf8'))
-        }
-        result = res.uwsWrite(data)
-        if (typeof cb === 'function') {
-          cb()
-        }
-      })
+      res.streaming = true
+      res.flushHeaders()
+      let data
+      if (chunk instanceof Buffer) {
+        data = toArrayBuffer(chunk)
+      } else if (typeof chunk === 'string') {
+        data = toArrayBuffer(Buffer.from(chunk, encoding || 'utf8'))
+      } else {
+        data = toArrayBuffer(Buffer.from(JSON.stringify(chunk), encoding || 'utf8'))
+      }
+      const result = res.uwsWrite(data)
+      if (typeof cb === 'function') {
+        cb()
+      }
       return result
     } catch (e) {
       if (typeof cb === 'function') {
@@ -182,12 +177,10 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
     }
     // provide writableEnded like node does, with slightly different behavior
     if (!res.writableEnded) {
-      res.cork(() => {
-        res.flushHeaders()
-        uwsEnd.call(res, body)
-        res.writableEnded = true
-        res.ended = true
-      })
+      res.flushHeaders()
+      uwsEnd.call(res, body)
+      res.writableEnded = true
+      res.ended = true
     }
     if (typeof res.onEnd === 'function') {
       res.onEnd()

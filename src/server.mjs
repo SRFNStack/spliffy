@@ -23,15 +23,15 @@ const appMethods = {
   WEBSOCKET: 'ws'
 }
 const optionsHandler = (config, middleware, methods) => {
-  return createHandler(() => ( {
-      headers: {
-        allow: methods
-      },
-      statusCode: 204
-    } ),
-    middleware,
-    [],
-    config
+  return createHandler(() => ({
+    headers: {
+      allow: methods
+    },
+    statusCode: 204
+  }),
+  middleware,
+  [],
+  config
   )
 }
 
@@ -69,7 +69,7 @@ const getHttpsApp = (key, cert) => {
 export async function startServer (config) {
   if (!state.initialized) {
     state.initialized = true
-    const routes = [...getNodeModuleRoutes(config), ...( await findRoutes(config) )]
+    const routes = [...getNodeModuleRoutes(config), ...(await findRoutes(config))]
     let app, port
     if (config.httpsKeyFile) {
       app = getHttpsApp(config.secure)

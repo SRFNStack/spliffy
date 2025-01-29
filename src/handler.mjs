@@ -192,23 +192,25 @@ setInterval(() => { currentDate = new Date().toISOString() }, 1000)
 
 export const createHandler = (handler, middleware, pathParameters, config) => function (res, req) {
   try {
-    req = decorateRequest(req, pathParameters, res, config)
-    res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
+    res.cork(() => {
+      req = decorateRequest(req, pathParameters, res, config)
+      res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
 
-    if (config.logAccess) {
-      res.onEnd = writeAccess(req, res)
-    }
+      if (config.logAccess) {
+        res.onEnd = writeAccess(req, res)
+      }
 
-    if (config.writeDateHeader) {
-      res.headers.date = currentDate
-    }
+      if (config.writeDateHeader) {
+        res.headers.date = currentDate
+      }
 
-    handleRequest(req, res, handler, middleware, config.errorTransformer)
-      .catch(e => {
-        log.error('Failed handling request', e)
-        res.statusCode = 500
-        res.end()
-      })
+      handleRequest(req, res, handler, middleware, config.errorTransformer)
+        .catch(e => {
+          log.error('Failed handling request', e)
+          res.statusCode = 500
+          res.end()
+        })
+    })
   } catch (e) {
     log.error('Failed handling request', e)
     res.statusCode = 500

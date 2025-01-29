@@ -1,9 +1,7 @@
-import ws from 'ws'
-
 const allSockets = []
 
-setInterval(()=>{
-  for(const ws of allSockets) {
+setInterval(() => {
+  for (const ws of allSockets) {
     ws.send(new Date().toISOString())
   }
 }, 3000)

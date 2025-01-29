@@ -142,7 +142,7 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
     }
     if (typeof handler !== 'function' && method !== 'WEBSOCKET') {
       throw new Error(`Request method ${method} in file ${filePath} must be a function. Got: ${typeof handlers[method]}`)
-    } else if(method === 'WEBSOCKET' && typeof handler !== 'object') {
+    } else if (method === 'WEBSOCKET' && typeof handler !== 'object') {
       throw new Error(`Websocket in file ${filePath} must be an object. Got: ${typeof handlers[method]}`)
     }
     if (!('streamRequestBody' in loadedHandler)) {
