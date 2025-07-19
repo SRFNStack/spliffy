@@ -1,11 +1,14 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "author": "snowbldr",
   "private": false,
   "homepage": "https://github.com/SRFNStack/spliffy",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=16 <=20"
+  },
   "files": [
     "src/*",
     "LICENSE.txt",
@@ -32,8 +35,8 @@
   "dependencies": {
     "cookie": "^1.0.2",
     "etag": "^1.8.1",
-    "uuid": "^8.3.2",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.51.0"
+    "uuid": "^11.1.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.74.0"
   },
   "devDependencies": {
     "helmet": "^4.6.0",
