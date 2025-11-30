@@ -1,6 +1,6 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "author": "snowbldr",
   "private": false,
   "homepage": "https://github.com/SRFNStack/spliffy",
@@ -36,7 +36,7 @@
     "cookie": "^1.0.2",
     "etag": "^1.8.1",
     "uuid": "^11.1.0",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.74.0"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.56.0"
   },
   "devDependencies": {
     "helmet": "^4.6.0",
