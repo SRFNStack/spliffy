@@ -1,13 +1,13 @@
 {
   "name": "@srfnstack/spliffy",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "author": "snowbldr",
   "private": false,
   "homepage": "https://github.com/SRFNStack/spliffy",
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": ">=16 <=20"
+    "node": ">=20 <=24"
   },
   "files": [
     "src/*",
