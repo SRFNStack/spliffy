@@ -26,6 +26,8 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     overflow-x: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 a {
@@ -45,7 +47,7 @@ a:hover {
         "header header"
         "sidebar main";
     grid-template-rows: var(--header-height) 1fr;
-    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     min-height: 100vh;
 }
 
@@ -62,16 +64,20 @@ a:hover {
     top: 0;
     z-index: 100;
     box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    min-width: 0;
 }
 
 .logo-container {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .logo-img {
     height: 40px;
+    flex-shrink: 0;
 }
 
 .logo-text {
@@ -79,6 +85,9 @@ a:hover {
     font-weight: 500;
     color: var(--accent-color);
     font-family: 'Ubuntu', sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Sidebar */
@@ -91,6 +100,7 @@ a:hover {
     position: sticky;
     top: var(--header-height);
     height: calc(100vh - var(--header-height));
+    min-width: 0;
 }
 
 .nav-link {
@@ -100,6 +110,9 @@ a:hover {
     border-radius: 4px;
     margin-bottom: 5px;
     font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -120,6 +133,7 @@ a:hover {
     max-width: 900px;
     margin: 0 auto;
     width: 100%;
+    min-width: 0;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -165,6 +179,10 @@ pre {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.menu-toggle {
+    display: none;
 }
 
 /* File Tree Visualization */
@@ -222,8 +240,51 @@ pre {
         grid-template-rows: var(--header-height) 1fr;
     }
 
+    .menu-toggle {
+        display: block;
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+
     .sidebar {
-        display: none; /* TODO: Add mobile menu toggle */
+        position: fixed;
+        top: var(--header-height);
+        left: -100%;
+        width: 80%;
+        max-width: 300px;
+        height: calc(100vh - var(--header-height));
+        z-index: 99;
+        transition: left 0.3s ease;
+        background-color: var(--bg-color);
+        display: block;
+    }
+
+    body.mobile-open .sidebar {
+        left: 0;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+    }
+
+    .mobile-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0,0,0,0.7);
+        z-index: 98;
+    }
+
+    body.mobile-open .mobile-overlay {
+        display: block;
+    }
+
+    /* Prevent scrolling when menu is open */
+    body.mobile-open {
+        overflow: hidden;
     }
 
     .main-content {

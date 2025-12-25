@@ -14,14 +14,14 @@ export default div(
 
   h4('Default Files (The "Index" Rule)'),
   p('To keep things clean, any file starting with "index." will be served as the default file for its directory. This works for .html, .txt, .png, or whatever else you\'ve got in the stash.'),
-  
+
   ul({ class: 'file-tree' },
     li(folder('www'),
       ul(
         li(folder('about'),
-           ul(
-             li(file('index.html'))
-           )
+          ul(
+            li(file('index.html'))
+          )
         ),
         li(file('index.html')),
         li(file('favicon.ico'))

@@ -1,6 +1,7 @@
 import { a, div, hr, p, h3, code } from './fnelements.mjs'
 import prismCode from './prismCode.js'
 export default div(
+  h3('Middleware'),
   p(
     'Spliffy supports express.js style middleware and works with some existing express.js middleware. '
   ),

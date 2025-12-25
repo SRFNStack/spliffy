@@ -28,6 +28,7 @@ export const routeNavItems = () =>
       (r) =>
         fnlink({
           to: r.url,
+          onclick: () => document.body.classList.remove('mobile-open'),
           class: pathState.bindAttr(() =>
             'nav-link' + (pathState().currentRoute.startsWith(r.url) ? ' active' : '')
           )

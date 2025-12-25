@@ -1,7 +1,8 @@
-import { a, div, li, p, strong, ul, code } from './fnelements.mjs'
+import { a, div, li, p, strong, ul, code, h3 } from './fnelements.mjs'
 import prismCode from './prismCode.js'
 
 export default div(
+  h3('Configuration'),
   p('These are all of the settings available with example values. You can include just the properties you want to change or all of them.'),
   prismCode(`{
     port: 10420,

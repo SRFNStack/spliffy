@@ -8,7 +8,7 @@ export default (sourceCode, width = '100%') => {
 
   Prism.highlightElement(src)
 
-  return div({ style: `margin: 1.5rem 0; display: flex; flex-direction: column; width: ${width}; max-width: 94vw;` },
+  return div({ style: `margin: 1.5rem 0; display: flex; flex-direction: column; width: ${width}; max-width: 100%;` },
     src
   )
 }

@@ -34,6 +34,10 @@
     div({ class: 'app-layout' },
       header,
       sidebar,
+      div({ 
+        class: 'mobile-overlay', 
+        onclick: () => document.body.classList.remove('mobile-open') 
+      }),
       div({ class: 'main-content' },
         routeSwitch(...routeElements()),
         div({ style: 'margin-top: 100px; padding: 20px; text-align: center; border-top: 1px solid var(--border-color); color: var(--text-secondary);' },

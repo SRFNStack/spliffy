@@ -1,8 +1,9 @@
-import { h3, div, p, code } from './fnelements.mjs'
+import { h3, h4, div, p, code } from './fnelements.mjs'
 import prismCode from './prismCode.js'
 
 export default div(
-  h3('Streaming Request'),
+  h3('Streaming'),
+  h4('Streaming Request'),
   p(
     'By default the entire request is read into memory. In order to use a readable instead, set the property ',
     code('streamRequestBody'), ' to true.'
@@ -31,7 +32,7 @@ export default {
     }
 }    
     `),
-  h3('Streaming Response'),
+  h4('Streaming Response'),
   p(
     'Instead of returning the body as a whole from the handler, you can stream the response.'
   ),

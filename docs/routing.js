@@ -4,6 +4,7 @@ const folder = (name) => span({ class: 'folder' }, name)
 const file = (name) => span({ class: 'file' }, name)
 
 export default div(
+  h3('Routing'),
   p('Routes are based entirely on their directory structure much like they are in apache.'),
   p('Example dir:'),
   ul({ class: 'file-tree' },
