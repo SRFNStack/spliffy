@@ -1,6 +1,6 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
-import { invokeMiddleware } from './middleware.mjs'
+import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
 import { decorateResponse, decorateRequest } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
 import stream from 'stream'
@@ -34,7 +34,9 @@ const executeHandler = async (url, res, req, bodyPromise, handler, middleware, e
     finalizeResponse(req, res, handled, handler.statusCodeOverride)
   } catch (e) {
     const refId = uuid()
-    await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+    if (middleware) {
+      await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+    }
     endError(res, e, refId, errorTransformer)
   }
 }
@@ -73,9 +75,9 @@ const ipv6CompressRegex = /\b:?(?:0+:?){2,}/g
 const compressIpv6 = ip => ip && ip.includes(':') ? ip.replaceAll(ipv6CompressRegex, '::') : ip
 
 const writeAccess = function (req, res) {
-  const start = new Date().getTime()
+  const start = Date.now()
   return () => {
-    log.access(compressIpv6(req.remoteAddress), compressIpv6(res.proxiedRemoteAddress) || '', res.statusCode, req.method, req.url, new Date().getTime() - start + 'ms')
+    log.access(compressIpv6(req.remoteAddress), compressIpv6(res.proxiedRemoteAddress) || '', res.statusCode, req.method, req.url, Date.now() - start + 'ms')
   }
 }
 
@@ -101,8 +103,8 @@ const finalizeResponse = (req, res, handled, statusCodeOverride) => {
 }
 
 const pipeResponse = (res, readStream, errorTransformer) => {
-  readStream.on('data', res.write)
-    .on('end', res.end)
+  readStream.on('data', chunk => res.write(chunk))
+    .on('end', () => res.end())
     .on('error', e => {
       try {
         readStream.destroy()
@@ -125,22 +127,18 @@ const doSerializeBody = (body, res) => {
   return serialized?.data || ''
 }
 
-async function executeMiddleware (middleware, req, res, errorTransformer, refId, e) {
-  if (!middleware) return
+async function executeMiddleware (processedMiddleware, req, res, errorTransformer, refId, e) {
+  if (!processedMiddleware) return
 
-  let applicableMiddleware = middleware[req.method]
-  if (middleware.ALL) {
-    if (applicableMiddleware) applicableMiddleware = middleware.ALL.concat(applicableMiddleware)
-    else applicableMiddleware = middleware.ALL
-  }
+  const methodMiddleware = processedMiddleware[req.method]
+  const allMiddleware = processedMiddleware.ALL
 
-  if (!applicableMiddleware || applicableMiddleware.length === 0) {
-    return
-  }
   if (e) {
-    await invokeMiddleware(applicableMiddleware.filter(mw => mw.length === 4), req, res, e)
+    if (allMiddleware?.error) await invokeMiddleware(allMiddleware.error, req, res, e)
+    if (methodMiddleware?.error) await invokeMiddleware(methodMiddleware.error, req, res, e)
   } else {
-    await invokeMiddleware(applicableMiddleware.filter(mw => mw.length === 3), req, res)
+    if (allMiddleware?.normal) await invokeMiddleware(allMiddleware.normal, req, res)
+    if (methodMiddleware?.normal) await invokeMiddleware(methodMiddleware.normal, req, res)
   }
 }
 
@@ -148,39 +146,47 @@ const handleRequest = async (req, res, handler, middleware, errorTransformer) =>
   try {
     let reqBody
     if (!handler.streamRequestBody) {
-      let buffer
-      reqBody = new Promise(
-        resolve =>
-          res.onData(async (data, isLast) => {
-            if (isLast) {
-              buffer = data.byteLength > 0 ? Buffer.concat([buffer, Buffer.from(data)].filter(b => b)) : buffer
-              resolve(buffer)
-            }
-            buffer = Buffer.concat([buffer, Buffer.from(data)].filter(b => b))
-          })
-      )
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        reqBody = Promise.resolve(null)
+      } else {
+        let buffer
+        reqBody = new Promise(
+          resolve =>
+            res.onData((data, isLast) => {
+              const chunk = Buffer.concat([Buffer.from(data)])
+              buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
+              if (isLast) {
+                resolve(buffer)
+              }
+            })
+        )
+      }
     } else {
       const readable = new Readable({
         read: () => {
         }
       })
-      res.onData(async (data, isLast) => {
-        if (data.byteLength === 0 && !isLast) return
-        // data must be copied so it isn't lost
-        readable.push(Buffer.concat([Buffer.from(data)]))
-        if (isLast) {
-          readable.push(null)
+      res.onData((data, isLast) => {
+        if (data.byteLength > 0 || isLast) {
+          readable.push(Buffer.concat([Buffer.from(data)]))
+          if (isLast) {
+            readable.push(null)
+          }
         }
       })
       reqBody = Promise.resolve(readable)
     }
-    await executeMiddleware(middleware, req, res, errorTransformer)
+    if (middleware) {
+      await executeMiddleware(middleware, req, res, errorTransformer)
+    }
     if (!res.writableEnded && !res.ended) {
       await executeHandler(req.spliffyUrl, res, req, reqBody, handler, middleware, errorTransformer)
     }
   } catch (e) {
     const refId = uuid()
-    await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+    if (middleware) {
+      await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+    }
     if (!res.writableEnded) { endError(res, e, refId, errorTransformer) }
   }
 }
@@ -190,31 +196,41 @@ export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS',
 let currentDate = new Date().toISOString()
 setInterval(() => { currentDate = new Date().toISOString() }, 1000)
 
-export const createHandler = (handler, middleware, pathParameters, config) => function (res, req) {
-  try {
-    res.cork(() => {
-      req = decorateRequest(req, pathParameters, res, config)
-      res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
+export const createHandler = (handler, middleware, pathParameters, config) => {
+  const processedMiddleware = preProcessMiddleware(middleware)
+  return function (res, req) {
+    try {
+      res.cork(() => {
+        req = decorateRequest(req, pathParameters, res, config)
+        res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
 
-      if (config.logAccess) {
-        res.onEnd = writeAccess(req, res)
+        if (config.logAccess) {
+          // pre-fetch IPs for logging while still safe
+          req._ra = req.remoteAddress
+          req._pra = req.proxiedRemoteAddress
+          res.onEnd = writeAccess(req, res)
+        }
+
+        if (config.writeDateHeader) {
+          res.headers.date = currentDate
+        }
+
+        handleRequest(req, res, handler, processedMiddleware, config.errorTransformer)
+          .catch(e => {
+            log.error('Failed handling request', e)
+            if (!res.writableEnded) {
+              res.statusCode = 500
+              res.end()
+            }
+          })
+      })
+    } catch (e) {
+      log.error('Failed handling request', e)
+      if (!res.writableEnded) {
+        res.statusCode = 500
+        res.end()
       }
-
-      if (config.writeDateHeader) {
-        res.headers.date = currentDate
-      }
-
-      handleRequest(req, res, handler, middleware, config.errorTransformer)
-        .catch(e => {
-          log.error('Failed handling request', e)
-          res.statusCode = 500
-          res.end()
-        })
-    })
-  } catch (e) {
-    log.error('Failed handling request', e)
-    res.statusCode = 500
-    res.end()
+    }
   }
 }
 
@@ -223,32 +239,41 @@ export const createNotFoundHandler = config => {
   const params = handler?.pathParameters || []
   return (res, req) => {
     try {
-      req = decorateRequest(req, params, res, config)
-      res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
-      if (config.logAccess) {
-        res.onEnd = writeAccess(req, res)
-      }
-      if (handler && typeof handler === 'object') {
-        if (handler.handlers && typeof handler.handlers[req.method] === 'function') {
-          if ('statusCodeOverride' in handler) {
-            handler.handlers[req.method].statusCodeOverride = handler.statusCodeOverride
+      res.cork(() => {
+        req = decorateRequest(req, params, res, config)
+        res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
+        if (config.logAccess) {
+          req._ra = req.remoteAddress
+          req._pra = req.proxiedRemoteAddress
+          res.onEnd = writeAccess(req, res)
+        }
+        if (handler && typeof handler === 'object') {
+          const processedMiddleware = preProcessMiddleware(handler.middleware)
+          if (handler.handlers && typeof handler.handlers[req.method] === 'function') {
+            const h = handler.handlers[req.method]
+            if ('statusCodeOverride' in handler) {
+              h.statusCodeOverride = handler.statusCodeOverride
+            }
+            handleRequest(req, res,
+              h,
+              processedMiddleware,
+              config.errorTransformer
+            ).catch((e) => {
+              log.error('Unexpected exception during request handling', e)
+              if (!res.writableEnded) {
+                res.statusCode = 500
+                res.end()
+              }
+            })
+          } else {
+            res.statusCode = 404
+            res.end()
           }
-          handleRequest(req, res,
-            handler.handlers[req.method],
-            handler.middleware,
-            config.errorTransformer
-          ).catch((e) => {
-            log.error('Unexpected exception during request handling', e)
-            res.statusCode = 500
-          })
         } else {
           res.statusCode = 404
           res.end()
         }
-      } else {
-        res.statusCode = 404
-        res.end()
-      }
+      })
     } catch (e) {
       log.error('Failed handling request', e)
     }

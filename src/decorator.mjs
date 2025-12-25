@@ -8,7 +8,8 @@ import httpStatusCodes, { defaultStatusMessages } from './httpStatusCodes.mjs'
 
 const { Writable } = stream
 
-const addressArrayBufferToString = addrBuf => String.fromCharCode.apply(null, new Int8Array(addrBuf))
+const addressArrayBufferToString = addrBuf => Buffer.from(addrBuf).toString()
+
 const excludedMessageProps = {
   setTimeout: true,
   _read: true,
@@ -19,73 +20,78 @@ const excludedMessageProps = {
   __proto__: true
 }
 
-const normalizeHeader = header => header.toLowerCase()
-
 const reqProtoProps = () => Object.keys(http.IncomingMessage.prototype).filter(p => !excludedMessageProps[p])
 
-export const setCookie = (res) => function () {
-  return res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie') || []), cookie.serialize(...arguments)])
-}
+class SpliffyRequest {
+  constructor (uwsReq, pathParameters, res, config) {
+    const query = uwsReq.getQuery()
+    this.res = res
+    this.path = uwsReq.getUrl()
+    this.url = query ? `${this.path}?${query}` : this.path
+    this.method = uwsReq.getMethod().toUpperCase()
+    this.headers = {}
+    uwsReq.forEach((header, value) => {
+      this.headers[header] = value
+    })
 
-export function decorateRequest (uwsReq, pathParameters, res, {
-  decodeQueryParameters,
-  decodePathParameters,
-  parseCookie,
-  extendIncomingMessage
-} = {}) {
-  // uwsReq can't be used in async functions because it gets de-allocated when the handler function returns
-  const req = {}
-  if (extendIncomingMessage) {
-    // frameworks like passport like to modify the message prototype
-    // Setting the prototype of req is not desirable because the entire api of IncomingMessage is not supported
-    for (const p of reqProtoProps()) {
-      if (!req[p]) req[p] = http.IncomingMessage.prototype[p]
+    if (config.extendIncomingMessage) {
+      for (const p of reqProtoProps()) {
+        if (!this[p]) this[p] = http.IncomingMessage.prototype[p]
+      }
+    }
+
+    const paramToIndex = pathParameters.reduce((acc, cur, i) => {
+      acc[cur] = i
+      return acc
+    }, {})
+
+    this.spliffyUrl = {
+      path: this.path,
+      query: (query && parseQuery(query, config.decodeQueryParameters)) || {},
+      param: name => uwsReq.getParameter(paramToIndex[name])
+    }
+    this.query = this.spliffyUrl.query
+    if (config.parseCookie) {
+      this.cookies = (this.headers.cookie && cookie.parse(this.headers.cookie)) || {}
     }
   }
-  const query = uwsReq.getQuery()
-  req.path = uwsReq.getUrl()
-  req.url = `${req.path}${query ? '?' + query : ''}`
-  const paramToIndex = pathParameters.reduce((acc, cur, i) => {
-    acc[cur] = i
-    return acc
-  }, {})
-  req.spliffyUrl = {
-    path: req.path,
-    query: (query && parseQuery(query, decodeQueryParameters)) || {},
-    param: name => uwsReq.getParameter(paramToIndex[name])
+
+  get remoteAddress () {
+    const val = addressArrayBufferToString(this.res.getRemoteAddressAsText())
+    Object.defineProperty(this, 'remoteAddress', { value: val, enumerable: true })
+    return val
   }
-  req.query = req.spliffyUrl.query
-  req.headers = {}
-  uwsReq.forEach((header, value) => { req.headers[header] = value })
-  req.method = uwsReq.getMethod().toUpperCase()
-  req.remoteAddress = addressArrayBufferToString(res.getRemoteAddressAsText())
-  req.proxiedRemoteAddress = addressArrayBufferToString(res.getProxiedRemoteAddressAsText())
-  req.get = header => req.headers[header]
-  if (parseCookie) {
-    req.cookies = (req.headers.cookie && cookie.parse(req.headers.cookie)) || {}
+
+  get proxiedRemoteAddress () {
+    const val = addressArrayBufferToString(this.res.getProxiedRemoteAddressAsText())
+    Object.defineProperty(this, 'proxiedRemoteAddress', { value: val, enumerable: true })
+    return val
   }
-  return req
+
+  get (header) {
+    return this.headers[header.toLowerCase()]
+  }
 }
 
-function toArrayBuffer (buffer) {
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+export function decorateRequest (uwsReq, pathParameters, res, config) {
+  return new SpliffyRequest(uwsReq, pathParameters, res, config)
 }
 
-export function decorateResponse (res, req, finalizeResponse, errorTransformer, endError, { acceptsDefault }) {
+export function decorateResponse (res, req, finalizeResponse, errorTransformer, endError, config) {
   res.onAborted(() => {
     res.ended = true
     res.writableEnded = true
     res.finalized = true
     log.error(`Request to ${req.url} was aborted`)
   })
-  res.acceptsDefault = acceptsDefault
+  res.acceptsDefault = config.acceptsDefault
   res.headers = {}
   res.headersSent = false
   res.setHeader = (header, value) => {
-    res.headers[normalizeHeader(header)] = value
+    res.headers[header.toLowerCase()] = value
   }
   res.removeHeader = header => {
-    delete res.headers[normalizeHeader(header)]
+    delete res.headers[header.toLowerCase()]
   }
   res.flushHeaders = () => {
     if (res.headersSent) return
@@ -96,118 +102,106 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
     if (typeof res.onFlushHeaders === 'function') {
       res.onFlushHeaders(res)
     }
-    for (const header of Object.keys(res.headers)) {
-      if (Array.isArray(res.headers[header])) {
-        for (const multiple of res.headers[header]) {
-          res.writeHeader(header, multiple.toString())
+    for (const header in res.headers) {
+      const val = res.headers[header]
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+          res.writeHeader(header, val[i].toString())
         }
       } else {
-        res.writeHeader(header, res.headers[header].toString())
+        res.writeHeader(header, val.toString())
       }
     }
   }
   res.writeHead = (status, headers) => {
     res.statusCode = status
-    res.assignHeaders(headers)
+    if (headers) res.assignHeaders(headers)
   }
   res.assignHeaders = headers => {
-    for (const header of Object.keys(headers)) {
-      res.headers[normalizeHeader(header)] = headers[header]
+    for (const header in headers) {
+      res.headers[header.toLowerCase()] = headers[header]
     }
   }
   res.getHeader = header => {
-    return res.headers[normalizeHeader(header)]
+    return res.headers[header.toLowerCase()]
   }
   res.status = (code) => {
     res.statusCode = code
-    return this
+    return res
   }
 
-  res.uwsWrite = res.write
+  const uwsWrite = res.write
   res.write = (chunk, encoding, cb) => {
     res.cork(() => {
-      try {
-        res.streaming = true
-        res.flushHeaders()
-        let data
-        if (chunk instanceof Buffer) {
-          data = toArrayBuffer(chunk)
-        } else if (typeof chunk === 'string') {
-          data = toArrayBuffer(Buffer.from(chunk, encoding || 'utf8'))
-        } else {
-          data = toArrayBuffer(Buffer.from(JSON.stringify(chunk), encoding || 'utf8'))
-        }
-        const result = res.uwsWrite(data)
-        if (typeof cb === 'function') {
-          cb()
-        }
-        return result
-      } catch (e) {
-        if (typeof cb === 'function') {
-          cb(e)
-        } else {
-          throw e
-        }
+      res.streaming = true
+      res.flushHeaders()
+      let data
+      if (chunk instanceof Buffer || chunk instanceof Uint8Array || typeof chunk === 'string') {
+        data = chunk
+      } else {
+        data = JSON.stringify(chunk)
       }
+      const result = uwsWrite.call(res, data)
+      if (typeof cb === 'function') cb()
+      return result
     })
   }
-  let outStream
+
   res.getWritable = () => {
-    if (!outStream) {
+    if (!res.outStream) {
       res.streaming = true
-      outStream = new Writable({
-        write: res.write
+      res.outStream = new Writable({
+        write: (chunk, encoding, callback) => {
+          res.write(chunk, encoding, callback)
+        }
       })
-        .on('finish', res.end)
-        .on('end', res.end)
+        .on('finish', () => res.end())
         .on('error', e => {
           try {
-            outStream.destroy()
+            res.outStream.destroy()
           } finally {
             endError(res, e, uuid(), errorTransformer)
           }
         })
     }
-    return outStream
+    return res.outStream
   }
 
   const uwsEnd = res.end
   res.ended = false
   res.end = body => {
-    if (res.ended) {
-      return
-    }
-    // provide writableEnded like node does, with slightly different behavior
-    if (!res.writableEnded) {
-      res.cork(() => {
-        res.flushHeaders()
-        uwsEnd.call(res, body)
-        res.writableEnded = true
-        res.ended = true
-      })
-    }
-    if (typeof res.onEnd === 'function') {
-      res.onEnd()
-    }
+    if (res.ended) return
+    res.cork(() => {
+      if (!res.headersSent) res.flushHeaders()
+      uwsEnd.call(res, body || '')
+      res.writableEnded = true
+      res.ended = true
+      if (typeof res.onEnd === 'function') res.onEnd()
+    })
   }
 
-  res.redirect = function (code, location) {
-    if (arguments.length === 1) {
+  res.redirect = (code, location) => {
+    if (typeof code === 'string') {
       location = code
       code = httpStatusCodes.MOVED_PERMANENTLY
     }
     return finalizeResponse(req, res, {
       statusCode: code,
-      headers: {
-        location: location
-      }
+      headers: { location }
     })
   }
-  res.send = (body) => {
-    finalizeResponse(req, res, body)
-  }
+  res.send = (body) => finalizeResponse(req, res, body)
   res.json = res.send
-  res.setCookie = setCookie(res)
+  res.setCookie = (name, value, options) => {
+    const serialized = cookie.serialize(name, value, options)
+    const existing = res.getHeader('Set-Cookie')
+    if (existing) {
+      if (Array.isArray(existing)) existing.push(serialized)
+      else res.setHeader('Set-Cookie', [existing, serialized])
+    } else {
+      res.setHeader('Set-Cookie', serialized)
+    }
+  }
   res.cookie = res.setCookie
   return res
 }

@@ -61,26 +61,39 @@ export const validateMiddlewareArray = (arr) => {
   }
 }
 
-export async function invokeMiddleware (middleware, req, res, reqErr) {
-  await new Promise((resolve, reject) => {
-    let current = -1
-    const next = (err) => {
-      if (err) reject(err)
-      if (res.writableEnded) {
-        resolve()
-        return
+export function preProcessMiddleware (middleware) {
+  if (!middleware) return null
+  const processed = {}
+  let hasAny = false
+  for (const method in middleware) {
+    const list = middleware[method]
+    if (list && list.length > 0) {
+      processed[method] = {
+        normal: list.filter(mw => mw.length <= 3),
+        error: list.filter(mw => mw.length === 4)
       }
-      current++
-      if (current === middleware.length) {
-        resolve()
-      } else {
-        try {
-          if (reqErr) middleware[current](reqErr, req, res, next)
-          else middleware[current](req, res, next)
-        } catch (e) {
-          log.error('Middleware threw exception', e)
-          reject(e)
-        }
+      hasAny = true
+    }
+  }
+  return hasAny ? processed : null
+}
+
+export async function invokeMiddleware (middleware, req, res, reqErr) {
+  if (!middleware || middleware.length === 0) return
+  return new Promise((resolve, reject) => {
+    let current = 0
+    const next = (err) => {
+      if (err) return reject(err)
+      if (res.writableEnded || current === middleware.length) {
+        return resolve()
+      }
+      const mw = middleware[current++]
+      try {
+        if (reqErr) mw(reqErr, req, res, next)
+        else mw(req, res, next)
+      } catch (e) {
+        log.error('Middleware threw exception', e)
+        reject(e)
       }
     }
 
