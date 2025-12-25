@@ -15,87 +15,38 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400&display=swap" rel="stylesheet">
     <!--    &lt;!&ndash;    font-family: 'Roboto', sans-serif;&ndash;>-->
     <link href="https://fonts.googleapis.com/css?family=Ubuntu:400,500&display=swap" rel="stylesheet">
-    <!--    font-family: 'Ubuntu', sans-serif;-->
+    <link href="style.css" rel="stylesheet">
 </head>
 <body>
 <script type="module">
   //hack to make github pages route this app
-  import { secondaryColor } from './constants.js'
   import { goTo, routeSwitch } from './fnroute.mjs'
   import {
-    a,
     div,
-    footer,
     img,
-    style,
+    a
   } from './fnelements.mjs'
   import { routeElements } from './routes.js'
   import header from './header.js'
+  import sidebar from './sidebar.js'
 
-  document.head.append(style(
-    `
-.noselect {
-            user-select: none;
-        }
-
-        html {
-            touch-action: manipulation;
-        }
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            font-weight: 300;
-            background: #fcfcfc
-        }
-
-        .display-font {
-            font-family: 'Ubuntu', sans-serif;
-        }
-
-        .flex-center {
-            display: flex;
-            justify-content: center;
-            align-items: center
-        }
-
-        html {
-            overflow-y: scroll;
-        }
-        body * {
-            max-width: 992px;
-        }
-        a {
-            color: ${secondaryColor};
-         }
-        button:focus {
-            outline: none;
-        }
-        button {
-            background: #fcfcfc;
-            color: ${secondaryColor};
-            font-family: 'Ubuntu', sans-serif;
-            border: darkgray solid 1px;
-            border-radius: 3px;
-            font-size: 16px;
-            font-weight: 400;
-            padding: 10px;
-            cursor: pointer;
-        }
-`
-  ))
   document.body.append(
-    div({ style: 'margin: 0 auto; width: 100%; padding: 10px' },
+    div({ class: 'app-layout' },
       header,
-      routeSwitch(...routeElements()),
-      footer({ style: 'margin-top: 100px; text-align: center; width: 100%;' },
-        a({ href: 'https://github.com/narcolepticsnowman/spliffy' },
-          img({ src: './GitHub_Logo.png' }),
-          img({ src: './GitHub-Mark-64px.png' })
-        ),
-        div('Copyright © 2019 Robert Kempton')
+      sidebar,
+      div({ class: 'main-content' },
+        routeSwitch(...routeElements()),
+        div({ style: 'margin-top: 100px; padding: 20px; text-align: center; border-top: 1px solid var(--border-color); color: var(--text-secondary);' },
+          a({ href: 'https://github.com/narcolepticsnowman/spliffy', target: '_blank', style: 'display: block; margin-bottom: 10px;' },
+            img({ src: './GitHub_Logo.png', style: 'height: 30px; filter: invert(0.8);' })
+          ),
+          div('Copyright © 2019-2025 Robert Kempton'),
+          div({ style: 'font-size: 0.8rem; margin-top: 5px;' }, 'Stay Spliffy. 🌿')
+        )
       )
     )
   )
+
   if (sessionStorage.redirect) {
     setTimeout(() => {
       goTo(sessionStorage.redirect.replace(location.pathname.split(/[#?]/)[0], ''))
@@ -103,7 +54,5 @@
     }, 1)
   }
 </script>
-
-
 </body>
 </html>

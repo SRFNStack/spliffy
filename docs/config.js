@@ -1,4 +1,4 @@
-import { a, div, li, p, strong, ul } from './fnelements.mjs'
+import { a, div, li, p, strong, ul, code } from './fnelements.mjs'
 import prismCode from './prismCode.js'
 
 export default div(
@@ -8,10 +8,10 @@ export default div(
     httpsPort: 14420,
     httpsKeyFile: "/opt/certs/server.key",
     httpsCertFile: "/opt/certs/server.cert",
-    routeDir: path.join(moduleDirname(import.meta.url), 'www'),
+    routeDir: path.join(path.dirname(url.fileURLToPath(import.meta.url)), 'www'),
     logLevel: 'INFO',
     logAccess: true,
-    logger: require('bunyan').createLogger({name: 'spliffy'}),
+    logger: bunyan.createLogger({name: 'spliffy'}),
     routePrefix: "api",
     defaultRoute: "/app.js",
     notFoundRoute: "/404",
@@ -34,7 +34,17 @@ export default div(
     staticCacheControl: "max-age=86400",
     extendIncomingMessage: false,
     writeDateHeader: false,
-    autoOptions: false
+    autoOptions: false,
+    nodeModuleRoutes: {
+        nodeModulesPath: path.resolve(__dirname, '../node_modules'),
+        files: [
+            'cookie/index.js',
+            {
+                modulePath: 'etag/index.js',
+                urlPath: '/etag.js'
+            }
+        ]
+    }
 }
 `, null, '100%'
   ),
@@ -46,7 +56,7 @@ export default div(
     li(strong('routeDir'), ': The directory the routes are contained in, should be an absolute path'),
     li(strong('logLevel'),
       ': The level at which to log. One of ["ERROR","WARN","INFO","DEBUG"].',
-      ' Default "INFO". You can use const {log} = require("spliffy") in your handlers'
+      ' Default "INFO". You can use import { log } from "@srfnstack/spliffy" in your handlers'
     ),
     li(strong('logAccess'), ': Whether to log access to the server or not. Default false.'),
     li(strong('logger'), ': A custom logger impl, logLevel and logAccess are ignored if this is provided.'),
@@ -92,6 +102,12 @@ export default div(
     li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.'),
     li(strong('extendIncomingMessage'), ': Apply the prototype of IncomingMessage to enable middleware that pollutes the prototype (like passportjs), default false.'),
     li(strong('writeDateHeader'), ': write a Date header with the server time with ISO format, default false.'),
-    li(strong('autoOptions'), ': automatically generate options routes for every end point if not provided, default false.')
+    li(strong('autoOptions'), ': automatically generate options routes for every end point if not provided, default false.'),
+    li(strong('nodeModuleRoutes'), ': Map files from node_modules directly to routes.',
+      ul(
+        li(strong('nodeModulesPath'), ': The absolute path to the node_modules directory'),
+        li(strong('files'), ': An array of files to expose. Can be a string (relative path within node_modules) or an object with ', code('modulePath'), ' and ', code('urlPath'), ' properties.')
+      )
+    )
   )
 )

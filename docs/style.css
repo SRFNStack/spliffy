@@ -1,0 +1,232 @@
+:root {
+    --bg-color: #121212;
+    --surface-color: #1e1e1e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --accent-color: #00e676; /* Kush Green */
+    --accent-hover: #69f0ae;
+    --border-color: #333;
+    --code-bg: #272822;
+    --font-main: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-mono: 'Fira Code', 'Consolas', monospace;
+    --sidebar-width: 250px;
+    --header-height: 60px;
+    --spacing-unit: 1rem;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-main);
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+a {
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--accent-hover);
+}
+
+/* Layout Grid */
+.app-layout {
+    display: grid;
+    grid-template-areas:
+        "header header"
+        "sidebar main";
+    grid-template-rows: var(--header-height) 1fr;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    min-height: 100vh;
+}
+
+/* Header */
+.top-bar {
+    grid-area: header;
+    background-color: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-unit);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-img {
+    height: 40px;
+}
+
+.logo-text {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--accent-color);
+    font-family: 'Ubuntu', sans-serif;
+}
+
+/* Sidebar */
+.sidebar {
+    grid-area: sidebar;
+    background-color: var(--bg-color);
+    border-right: 1px solid var(--border-color);
+    padding: var(--spacing-unit);
+    overflow-y: auto;
+    position: sticky;
+    top: var(--header-height);
+    height: calc(100vh - var(--header-height));
+}
+
+.nav-link {
+    display: block;
+    padding: 10px 15px;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-weight: 400;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.nav-link.active {
+    background-color: rgba(0, 230, 118, 0.1);
+    color: var(--accent-color);
+    border-left: 3px solid var(--accent-color);
+}
+
+/* Main Content */
+.main-content {
+    grid-area: main;
+    padding: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-family: 'Ubuntu', sans-serif;
+}
+
+h1 { font-size: 2.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.5rem; }
+
+p, ul, ol {
+    margin-bottom: 1.2rem;
+}
+
+code {
+    font-family: var(--font-mono);
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+pre {
+    background-color: var(--code-bg) !important;
+    border-radius: 6px;
+    padding: 1rem !important;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+}
+
+/* Utilities */
+.flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* File Tree Visualization */
+.file-tree {
+    list-style: none;
+    padding-left: 0;
+    font-family: var(--font-mono);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    background-color: var(--surface-color);
+    margin-bottom: 1.5rem;
+}
+
+.file-tree ul {
+    list-style: none;
+    padding-left: 1.5rem;
+    margin-bottom: 0;
+    border-left: 1px solid var(--border-color);
+}
+
+.file-tree li {
+    position: relative;
+    padding-left: 0.5rem;
+    margin: 0.2rem 0;
+}
+
+.file-tree .folder {
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+.file-tree .folder::before {
+    content: "📁 ";
+    margin-right: 0.2rem;
+}
+
+.file-tree .file {
+    color: var(--text-primary);
+}
+
+.file-tree .file::before {
+    content: "📄 ";
+    margin-right: 0.2rem;
+}
+
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .app-layout {
+        grid-template-areas:
+            "header"
+            "main";
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--header-height) 1fr;
+    }
+
+    .sidebar {
+        display: none; /* TODO: Add mobile menu toggle */
+    }
+
+    .main-content {
+        padding: 1rem;
+    }
+}

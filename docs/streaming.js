@@ -11,7 +11,7 @@ export default div(
     'This can be set at the route level to apply to all methods'
   ),
   prismCode(`
-module.exports = {
+export default {
     streamRequestBody: true,
     POST: async ( { url: { query: { filename = 'foo.dat' } }, body } ) => promisifiedPipeline(
         body,
@@ -21,7 +21,7 @@ module.exports = {
     `),
   p('And at the handler level by setting the handler as an object'),
   prismCode(`
-module.exports = {
+export default {
     POST: {
         streamRequestBody: true,
         handler: async ( { url: { query: { filename = 'foo.dat' } }, body } ) => promisifiedPipeline(
@@ -39,7 +39,7 @@ module.exports = {
     'Headers are sent before the first write, and cannot be modified after.'
   ),
   p(
-    'The best way is to use ', code('res.asWritable()'), ' to get a stream.Writable in conjunction with pipeline.'
+    'The best way is to use ', code('res.getWritable()'), ' to get a stream.Writable in conjunction with pipeline.'
   ),
   prismCode(`
 GET: async ({res}) => promisifiedPipeline(

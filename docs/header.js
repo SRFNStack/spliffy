@@ -1,25 +1,20 @@
-import { blockquote, div, h1, header, img, nav, p } from './fnelements.mjs'
-import { primaryColor } from './constants.js'
-import { routeNavItems } from './routes.js'
+import { div, header, img, a, span } from './fnelements.mjs'
 import { goTo } from './fnroute.mjs'
 
-export default header({ class: 'container text-center' },
+export default header({ class: 'top-bar' },
   div({
-    class: 'flex-center',
-    style: 'flex-wrap: wrap; padding-bottom: 10px; cursor: pointer',
+    class: 'logo-container',
+    style: 'cursor: pointer',
     onclick: () => goTo('/')
   },
-  h1(
-    img({
-      src: 'spliffy_logo_text_small.png',
-      alt: 'Spliffy',
-      title: 'Spliffy Logo',
-      style: 'height: 125px'
-    })),
-  blockquote(
-    p('directory based routing with js request handlers and static file serving')
-  )
+  img({
+    src: 'spliffy_logo_text_small.png',
+    alt: 'Spliffy',
+    class: 'logo-img'
+  }),
+  span({ class: 'logo-text' }, 'Docs')
   ),
-  nav({ class: 'flex-center', style: 'border-bottom: solid 1px darkgray; background-color: ' + primaryColor },
-    div({ class: 'flex-center noselect', style: 'flex-wrap: wrap;' }, ...routeNavItems()))
+  a({ href: 'https://github.com/narcolepticsnowman/spliffy', target: '_blank' },
+    img({ src: './GitHub-Mark-64px.png', style: 'height: 32px; filter: invert(1);' })
+  )
 )

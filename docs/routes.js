@@ -6,6 +6,7 @@ import streaming from './streaming.js'
 import staticFiles from './staticFiles.js'
 import config from './config.js'
 import middleware from './middleware.js'
+import websockets from './websockets.js'
 
 const routes = [
   { url: '/', component: home, absolute: true },
@@ -13,6 +14,7 @@ const routes = [
   { url: '/static', linkText: 'Static Files', component: staticFiles },
   { url: '/middleware', linkText: 'Middleware', component: middleware },
   { url: '/streaming', linkText: 'Streaming', component: streaming },
+  { url: '/websocket', linkText: 'WebSockets', component: websockets },
   { url: '/config', linkText: 'Config', component: config },
   // {url: "/reference", linkText: 'Reference', component: reference},
   { url: '.*', component: home }
@@ -26,14 +28,9 @@ export const routeNavItems = () =>
       (r) =>
         fnlink({
           to: r.url,
-          style: {
-            cursor: 'pointer',
-            padding: '12px',
-            'font-weight': 400,
-            'font-size': '18px',
-            'text-decoration': 'none',
-            color: pathState.bindStyle(() => pathState().currentRoute.startsWith(r.url) ? 'limegreen' : 'inherit')
-          }
+          class: pathState.bindAttr(() =>
+            'nav-link' + (pathState().currentRoute.startsWith(r.url) ? ' active' : '')
+          )
         },
         r.linkText
         )

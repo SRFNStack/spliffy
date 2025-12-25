@@ -26,7 +26,7 @@ export default div(
   ),
   p(
     'Middleware can either be added to the application config, exported as a variable on a controller, or a ',
-    'file with the extension `.mw.js` can be placed in a route directory and it will be applied to all routes in that folder and all sub-folders.'
+    'file with the extension `.mw.mjs` can be placed in a route directory and it will be applied to all routes in that folder and all sub-folders.'
   ),
 
   p(
@@ -38,8 +38,10 @@ export default div(
   h3('Root config example'),
   prismCode(
 `
-require('spliffy')( {
-        routeDir: __dirname + '/www',
+import spliffy from '@srfnstack/spliffy'
+
+spliffy( {
+        routeDir: new URL('./www', import.meta.url).pathname,
         middleware: [(req, res, next)=>{
             console.log("Look at me! I'm in the middle!")
             next()
@@ -50,7 +52,7 @@ require('spliffy')( {
   h3('Route example'),
   prismCode(
         `
-module.exports = {
+export default {
     middleware: [ ( req, res, next ) => {
             if( req.user 
                 && Array.isArray(req.user.roles) 
@@ -69,13 +71,13 @@ module.exports = {
 `
   ),
   h3('.mw.js file example'),
-  p('Create a file named ', code({ style: 'font-size: large;' }, 'middleware.mw.js'),
-    ' (middleware can be anything you want, i.e. ', code({ style: 'font-size: large;' }, 'requiresAuth.mw.js'), '). ' +
+  p('Create a file named ', code({ style: 'font-size: large;' }, 'middleware.mw.mjs'),
+    ' (middleware can be anything you want, i.e. ', code({ style: 'font-size: large;' }, 'requiresAuth.mw.mjs'), '). ' +
         'All middleware files will be applied in no specific order to all routes in the same directory and all routes in sub-directories.'
   ),
   prismCode(
         `
-module.exports = {
+export default {
     middleware: { 
         ALL: [
             (req, res, next)=>{
