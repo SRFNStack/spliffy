@@ -1,41 +1,28 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
 import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
-import { decorateResponse, decorateRequest } from './decorator.mjs'
+import { decorateResponse, SpliffyRequest } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
 import stream from 'stream'
 const { Readable } = stream
 
-/**
- * Execute the handler
- * @param url The url being requested
- * @param res The uws response object
- * @param req The uws request object
- * @param bodyPromise The request body promise
- * @param handler The handler function for the route
- * @param middleware The middleware that applies to this request
- * @param errorTransformer An errorTransformer to convert error objects into response data
- */
+const NULL_PROMISE = Promise.resolve(null)
+
 const executeHandler = async (url, res, req, bodyPromise, handler, middleware, errorTransformer) => {
   try {
-    bodyPromise = bodyPromise.then(bodyContent => {
-      if (bodyContent instanceof Readable) return bodyContent
-      if (res.writableEnded) return
-      return deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
-    })
-  } catch (e) {
-    log.error('Failed to parse request.', e)
-    end(res, 400, handler.statusCodeOverride)
-    return
-  }
+    const bodyContent = await (bodyPromise || NULL_PROMISE)
+    if (!res.writableEnded) {
+      const deserializedBody = (bodyContent instanceof Readable || !bodyContent)
+        ? bodyContent
+        : deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
 
-  try {
-    const handled = await handler({ url, bodyPromise, headers: req.headers, req, res })
-    finalizeResponse(req, res, handled, handler.statusCodeOverride)
+      const handled = await handler({ url, bodyPromise: Promise.resolve(deserializedBody), headers: req.headers, req, res })
+      finalizeResponse(req, res, handled, handler.statusCodeOverride)
+    }
   } catch (e) {
     const refId = uuid()
     if (middleware) {
-      await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+      try { await executeMiddleware(middleware, req, res, errorTransformer, refId, e) } catch (me) { log.error(me) }
     }
     endError(res, e, refId, errorTransformer)
   }
@@ -50,55 +37,51 @@ const endError = (res, e, refId, errorTransformer) => {
   }
   res.headers['x-ref-id'] = refId
   const status = e.statusCode || 500
-  if (status === 500) {
-    log.error(e)
-  }
+  if (status === 500) log.error(e)
   end(res, status, null, e.body || '')
 }
 
 const end = (res, defaultStatusCode, statusCodeOverride, body) => {
-  // status set directly on res wins
   res.statusCode = statusCodeOverride || res.statusCode || defaultStatusCode
+  if (currentDate) res.setHeader('Date', currentDate)
   if (body instanceof Readable || res.streaming) {
     res.streaming = true
-    if (body instanceof Readable) {
-      pipeResponse(res, body)
-    }
-    // handler is responsible for ending the response if they are streaming
+    if (body instanceof Readable) pipeResponse(res, body)
   } else {
-    res.end(doSerializeBody(body, res) || '')
+    if (typeof body === 'string' || !body || body instanceof Buffer) {
+      res.end(body || '')
+    } else {
+      res.end(doSerializeBody(body, res) || '')
+    }
   }
 }
 
 const ipv6CompressRegex = /\b:?(?:0+:?){2,}/g
-
 const compressIpv6 = ip => ip && ip.includes(':') ? ip.replaceAll(ipv6CompressRegex, '::') : ip
 
 const writeAccess = function (req, res) {
-  const start = Date.now()
+  let remoteAddress, proxiedRemoteAddress
+  try { remoteAddress = req.remoteAddress } catch (e) {}
+  try { proxiedRemoteAddress = req.proxiedRemoteAddress } catch (e) {}
+  const { method, url, startTime } = req
+
   return () => {
-    log.access(compressIpv6(req.remoteAddress), compressIpv6(res.proxiedRemoteAddress) || '', res.statusCode, req.method, req.url, Date.now() - start + 'ms')
+    log.access(compressIpv6(remoteAddress), compressIpv6(proxiedRemoteAddress) || '', res.statusCode, method, url, Date.now() - startTime + 'ms')
   }
 }
 
 const finalizeResponse = (req, res, handled, statusCodeOverride) => {
-  if (!res.finalized) {
-    if (!handled) {
-      // if no error was thrown, assume everything is fine. Otherwise each handler must return truthy which is un-necessary for methods that don't need to return anything
-      end(res, 200, statusCodeOverride)
-    } else {
-      // if the returned object has known fields, treat it as a response object instead of the body
-      if (handled.body || handled.statusMessage || handled.statusCode || handled.headers) {
-        if (handled.headers) {
-          res.assignHeaders(handled.headers)
-        }
-        res.statusMessage = handled.statusMessage || res.statusMessage
-        end(res, handled.statusCode || 200, statusCodeOverride, handled.body)
-      } else {
-        end(res, 200, statusCodeOverride, handled)
-      }
-    }
-    res.finalized = true
+  if (res.finalized) return
+  res.finalized = true
+
+  if (typeof handled === 'string' || !handled || handled instanceof Buffer) {
+    end(res, 200, statusCodeOverride, handled)
+  } else if (handled.body || handled.statusMessage || handled.statusCode || handled.headers) {
+    if (handled.headers) res.assignHeaders(handled.headers)
+    if (handled.statusMessage) res.statusMessage = handled.statusMessage
+    end(res, handled.statusCode || 200, statusCodeOverride, handled.body)
+  } else {
+    end(res, 200, statusCodeOverride, handled)
   }
 }
 
@@ -106,21 +89,13 @@ const pipeResponse = (res, readStream, errorTransformer) => {
   readStream.on('data', chunk => res.write(chunk))
     .on('end', () => res.end())
     .on('error', e => {
-      try {
-        readStream.destroy()
-      } finally {
-        endError(res, e, uuid(), errorTransformer)
-      }
+      try { readStream.destroy() } finally { endError(res, e, uuid(), errorTransformer) }
     })
 }
 
 const doSerializeBody = (body, res) => {
-  if (!body || typeof body === 'string' || body instanceof Readable) {
-    return body
-  }
-  const contentType = res.getHeader('content-type')
+  const contentType = res.headers['content-type']
   const serialized = serializeBody(body, contentType, res.acceptsDefault)
-
   if (serialized?.contentType && !contentType) {
     res.headers['content-type'] = serialized.contentType
   }
@@ -129,10 +104,8 @@ const doSerializeBody = (body, res) => {
 
 async function executeMiddleware (processedMiddleware, req, res, errorTransformer, refId, e) {
   if (!processedMiddleware) return
-
   const methodMiddleware = processedMiddleware[req.method]
   const allMiddleware = processedMiddleware.ALL
-
   if (e) {
     if (allMiddleware?.error) await invokeMiddleware(allMiddleware.error, req, res, e)
     if (methodMiddleware?.error) await invokeMiddleware(methodMiddleware.error, req, res, e)
@@ -142,80 +115,91 @@ async function executeMiddleware (processedMiddleware, req, res, errorTransforme
   }
 }
 
-const handleRequest = async (req, res, handler, middleware, errorTransformer) => {
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE', 'WEBSOCKET']
+
+let currentDate = ''
+let dateInterval = null
+
+const handleRequest = async (sReq, res, handler, processedMiddleware, config) => {
   try {
-    let reqBody
-    if (!handler.streamRequestBody) {
-      if (req.method === 'GET' || req.method === 'HEAD') {
-        reqBody = Promise.resolve(null)
+    let reqBodyPromise = NULL_PROMISE
+    if (sReq.method !== 'GET' && sReq.method !== 'HEAD') {
+      if (handler.streamRequestBody) {
+        const readable = new Readable({ read () {} })
+        reqBodyPromise = Promise.resolve(readable)
+        res.onData((data, isLast) => {
+          if (data.byteLength > 0 || isLast) {
+            readable.push(Buffer.concat([Buffer.from(data)]))
+            if (isLast) readable.push(null)
+          }
+        })
       } else {
-        let buffer
-        reqBody = new Promise(
-          resolve =>
-            res.onData((data, isLast) => {
-              const chunk = Buffer.concat([Buffer.from(data)])
-              buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
-              if (isLast) {
-                resolve(buffer)
-              }
-            })
-        )
+        reqBodyPromise = new Promise(resolve => res.onData((data, isLast) => {
+          const chunk = Buffer.concat([Buffer.from(data)])
+          res._buffer = res._buffer ? Buffer.concat([res._buffer, chunk]) : chunk
+          if (isLast) resolve(res._buffer)
+        }))
+      }
+    }
+
+    if (processedMiddleware) {
+      await executeMiddleware(processedMiddleware, sReq, res, config.errorTransformer)
+      if (!res.writableEnded && !res.ended) {
+        await executeHandler(sReq.spliffyUrl, res, sReq, reqBodyPromise, handler, processedMiddleware, config.errorTransformer)
       }
     } else {
-      const readable = new Readable({
-        read: () => {
-        }
-      })
-      res.onData((data, isLast) => {
-        if (data.byteLength > 0 || isLast) {
-          readable.push(Buffer.concat([Buffer.from(data)]))
-          if (isLast) {
-            readable.push(null)
-          }
-        }
-      })
-      reqBody = Promise.resolve(readable)
-    }
-    if (middleware) {
-      await executeMiddleware(middleware, req, res, errorTransformer)
-    }
-    if (!res.writableEnded && !res.ended) {
-      await executeHandler(req.spliffyUrl, res, req, reqBody, handler, middleware, errorTransformer)
+      await executeHandler(sReq.spliffyUrl, res, sReq, reqBodyPromise, handler, null, config.errorTransformer)
     }
   } catch (e) {
     const refId = uuid()
-    if (middleware) {
-      await executeMiddleware(middleware, req, res, errorTransformer, refId, e)
+    if (processedMiddleware) {
+      await executeMiddleware(processedMiddleware, sReq, res, config.errorTransformer, refId, e)
     }
-    if (!res.writableEnded) { endError(res, e, refId, errorTransformer) }
+    if (!res.writableEnded) { endError(res, e, refId, config.errorTransformer) }
   }
 }
 
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE', 'WEBSOCKET']
-
-let currentDate = new Date().toISOString()
-setInterval(() => { currentDate = new Date().toISOString() }, 1000)
-
 export const createHandler = (handler, middleware, pathParameters, config) => {
   const processedMiddleware = preProcessMiddleware(middleware)
+  if (config.writeDateHeader && !dateInterval) {
+    currentDate = new Date().toUTCString()
+    dateInterval = setInterval(() => { currentDate = new Date().toUTCString() }, 1000)
+  }
+
+  // Pre-allocated request object for sync path
+  const syncSReq = new SpliffyRequest(null, pathParameters, null, config)
+  const syncContext = {
+    get url () { return syncSReq.spliffyUrl },
+    bodyPromise: NULL_PROMISE,
+    get headers () { return syncSReq.headers },
+    req: syncSReq,
+    res: null
+  }
+
   return function (res, req) {
     try {
-      res.cork(() => {
-        req = decorateRequest(req, pathParameters, res, config)
-        res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
-
-        if (config.logAccess) {
-          // pre-fetch IPs for logging while still safe
-          req._ra = req.remoteAddress
-          req._pra = req.proxiedRemoteAddress
-          res.onEnd = writeAccess(req, res)
+      const method = req.getMethod()
+      if (!processedMiddleware && !handler.streamRequestBody && (method === 'get' || method === 'head')) {
+        // HYPER FAST PATH
+        syncSReq.init(req, pathParameters, res, config)
+        syncContext.res = res
+        decorateResponse(res, syncSReq, finalizeResponse, config.errorTransformer, endError, config)
+        if (config.logAccess) res.onEnd = writeAccess(syncSReq, res)
+        const handled = handler(syncContext)
+        if (handled instanceof Promise) {
+          res.ensureOnAborted()
+          handled.then(h => finalizeResponse(syncSReq, res, h, handler.statusCodeOverride))
+            .catch(e => endError(res, e, uuid(), config.errorTransformer))
+        } else {
+          finalizeResponse(syncSReq, res, handled, handler.statusCodeOverride)
         }
+      } else {
+        const sReq = new SpliffyRequest(req, pathParameters, res, config)
+        decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
+        res.ensureOnAborted()
+        if (config.logAccess) res.onEnd = writeAccess(sReq, res)
 
-        if (config.writeDateHeader) {
-          res.headers.date = currentDate
-        }
-
-        handleRequest(req, res, handler, processedMiddleware, config.errorTransformer)
+        handleRequest(sReq, res, handler, processedMiddleware, config)
           .catch(e => {
             log.error('Failed handling request', e)
             if (!res.writableEnded) {
@@ -223,7 +207,7 @@ export const createHandler = (handler, middleware, pathParameters, config) => {
               res.end()
             }
           })
-      })
+      }
     } catch (e) {
       log.error('Failed handling request', e)
       if (!res.writableEnded) {
@@ -239,41 +223,33 @@ export const createNotFoundHandler = config => {
   const params = handler?.pathParameters || []
   return (res, req) => {
     try {
-      res.cork(() => {
-        req = decorateRequest(req, params, res, config)
-        res = decorateResponse(res, req, finalizeResponse, config.errorTransformer, endError, config)
-        if (config.logAccess) {
-          req._ra = req.remoteAddress
-          req._pra = req.proxiedRemoteAddress
-          res.onEnd = writeAccess(req, res)
-        }
-        if (handler && typeof handler === 'object') {
-          const processedMiddleware = preProcessMiddleware(handler.middleware)
-          if (handler.handlers && typeof handler.handlers[req.method] === 'function') {
-            const h = handler.handlers[req.method]
-            if ('statusCodeOverride' in handler) {
-              h.statusCodeOverride = handler.statusCodeOverride
-            }
-            handleRequest(req, res,
-              h,
-              processedMiddleware,
-              config.errorTransformer
-            ).catch((e) => {
+      const sReq = new SpliffyRequest(req, params, res, config)
+      decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
+      res.ensureOnAborted()
+      if (config.logAccess) res.onEnd = writeAccess(sReq, res)
+      if (handler && typeof handler === 'object') {
+        const processedMiddleware = preProcessMiddleware(handler.middleware)
+        if (handler.handlers && typeof handler.handlers[sReq.method] === 'function') {
+          const h = handler.handlers[sReq.method]
+          if ('statusCodeOverride' in handler) {
+            h.statusCodeOverride = handler.statusCodeOverride
+          }
+          handleRequest(sReq, res, h, processedMiddleware, config)
+            .catch(e => {
               log.error('Unexpected exception during request handling', e)
               if (!res.writableEnded) {
                 res.statusCode = 500
                 res.end()
               }
             })
-          } else {
-            res.statusCode = 404
-            res.end()
-          }
         } else {
           res.statusCode = 404
           res.end()
         }
-      })
+      } else {
+        res.statusCode = 404
+        res.end()
+      }
     } catch (e) {
       log.error('Failed handling request', e)
     }
