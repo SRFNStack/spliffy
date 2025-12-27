@@ -102,7 +102,7 @@ export async function startServer (config) {
         if (method === 'WEBSOCKET') {
           theHandler = route.handlers[method]
         } else {
-          theHandler = createHandler(route.handlers[method], route.middleware, route.pathParameters, config)
+          theHandler = createHandler(route.handlers[method], route.middleware, route.paramToIndex, config, route.urlPath)
         }
         app[appMethods[method]](route.urlPath, theHandler)
         if (hadSlash && config.serveRoutesWithSlash) {

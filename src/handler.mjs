@@ -56,20 +56,6 @@ const end = (res, defaultStatusCode, statusCodeOverride, body) => {
   }
 }
 
-const ipv6CompressRegex = /\b:?(?:0+:?){2,}/g
-const compressIpv6 = ip => ip && ip.includes(':') ? ip.replaceAll(ipv6CompressRegex, '::') : ip
-
-const writeAccess = function (req, res) {
-  let remoteAddress, proxiedRemoteAddress
-  try { remoteAddress = req.remoteAddress } catch (e) {}
-  try { proxiedRemoteAddress = req.proxiedRemoteAddress } catch (e) {}
-  const { method, url, startTime } = req
-
-  return () => {
-    log.access(compressIpv6(remoteAddress), compressIpv6(proxiedRemoteAddress) || '', res.statusCode, method, url, Date.now() - startTime + 'ms')
-  }
-}
-
 const finalizeResponse = (req, res, handled, statusCodeOverride) => {
   if (res.finalized) return
   res.finalized = true
@@ -159,15 +145,17 @@ const handleRequest = async (sReq, res, handler, processedMiddleware, config) =>
   }
 }
 
-export const createHandler = (handler, middleware, pathParameters, config) => {
+export const createHandler = (handler, middleware, paramToIndex, config, urlPath) => {
   const processedMiddleware = preProcessMiddleware(middleware)
   if (config.writeDateHeader && !dateInterval) {
     currentDate = new Date().toUTCString()
     dateInterval = setInterval(() => { currentDate = new Date().toUTCString() }, 1000)
   }
 
+  const isWildcardPath = urlPath?.indexOf('*') > -1
+
   // Pre-allocated request object for sync path
-  const syncSReq = new SpliffyRequest(null, pathParameters, null, config)
+  const syncSReq = new SpliffyRequest(null, paramToIndex, null, config)
   const syncContext = {
     get url () { return syncSReq.spliffyUrl },
     bodyPromise: NULL_PROMISE,
@@ -178,26 +166,29 @@ export const createHandler = (handler, middleware, pathParameters, config) => {
 
   return function (res, req) {
     try {
-      const method = req.getMethod()
-      if (!processedMiddleware && !handler.streamRequestBody && (method === 'get' || method === 'head')) {
+      const rawMethod = req.getMethod()
+      if (!processedMiddleware && !handler.streamRequestBody && (rawMethod === 'get' || rawMethod === 'head')) {
         // HYPER FAST PATH
-        syncSReq.init(req, pathParameters, res, config)
+        const method = rawMethod === 'get' ? 'GET' : 'HEAD'
+        syncSReq.init(req, paramToIndex, res, config, method, isWildcardPath ? null : urlPath)
         syncContext.res = res
         decorateResponse(res, syncSReq, finalizeResponse, config.errorTransformer, endError, config)
-        if (config.logAccess) res.onEnd = writeAccess(syncSReq, res)
         const handled = handler(syncContext)
         if (handled instanceof Promise) {
+          syncSReq.forceCache()
           res.ensureOnAborted()
           handled.then(h => finalizeResponse(syncSReq, res, h, handler.statusCodeOverride))
             .catch(e => endError(res, e, uuid(), config.errorTransformer))
+        } else if (typeof handled === 'string' || handled instanceof Buffer) {
+          end(res, 200, handler.statusCodeOverride, handled)
         } else {
           finalizeResponse(syncSReq, res, handled, handler.statusCodeOverride)
         }
       } else {
-        const sReq = new SpliffyRequest(req, pathParameters, res, config)
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config)
+        sReq.forceCache()
         decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
         res.ensureOnAborted()
-        if (config.logAccess) res.onEnd = writeAccess(sReq, res)
 
         handleRequest(sReq, res, handler, processedMiddleware, config)
           .catch(e => {
@@ -220,13 +211,13 @@ export const createHandler = (handler, middleware, pathParameters, config) => {
 
 export const createNotFoundHandler = config => {
   const handler = config.defaultRouteHandler || config.notFoundRouteHandler
-  const params = handler?.pathParameters || []
+  const paramToIndex = handler?.paramToIndex || {}
   return (res, req) => {
     try {
-      const sReq = new SpliffyRequest(req, params, res, config)
+      const sReq = new SpliffyRequest(req, paramToIndex, res, config)
+      sReq.forceCache()
       decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
       res.ensureOnAborted()
-      if (config.logAccess) res.onEnd = writeAccess(sReq, res)
       if (handler && typeof handler === 'object') {
         const processedMiddleware = preProcessMiddleware(handler.middleware)
         if (handler.handlers && typeof handler.handlers[sReq.method] === 'function') {

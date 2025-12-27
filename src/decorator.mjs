@@ -1,5 +1,4 @@
 import cookie from 'cookie'
-import http from 'http'
 import { parseQuery } from './url.mjs'
 import { v4 as uuid } from 'uuid'
 import stream from 'stream'
@@ -7,47 +6,27 @@ import { defaultStatusMessages } from './httpStatusCodes.mjs'
 
 const { Writable } = stream
 
-const excludedMessageProps = {
-  setTimeout: true, _read: true, destroy: true, _addHeaderLines: true, _addHeaderLine: true, _dump: true, __proto__: true
-}
-
-let _reqProtoProps = null
-const getReqProtoProps = () => {
-  if (!_reqProtoProps) {
-    _reqProtoProps = Object.keys(http.IncomingMessage.prototype).filter(p => !excludedMessageProps[p])
-  }
-  return _reqProtoProps
-}
-
 export class SpliffyRequest {
-  constructor (uwsReq, pathParameters, res, config) {
-    this.init(uwsReq, pathParameters, res, config)
+  constructor (uwsReq, paramToIndex, res, config) {
+    this.init(uwsReq, paramToIndex, res, config)
   }
 
-  init (uwsReq, pathParameters, res, config) {
+  init (uwsReq, paramToIndex, res, config, method, urlPath) {
     this.res = res
     this._uwsReq = uwsReq
     this._config = config
-    this._pathParameters = pathParameters
-    this.path = uwsReq ? uwsReq.getUrl() : ''
-    this.method = uwsReq ? uwsReq.getMethod().toUpperCase() : ''
+    this._paramToIndex = paramToIndex
+    this.path = urlPath || (uwsReq ? uwsReq.getUrl() : '')
+    this.method = method || (uwsReq ? uwsReq.getMethod().toUpperCase() : '')
     this._url = null
     this._headers = null
     this._spliffyUrl = null
     this._cookies = null
-    this.startTime = Date.now()
+  }
 
-    if (uwsReq) {
-      this._cacheHeaders()
-      this._cacheSpliffyUrl()
-    }
-
-    if (config.extendIncomingMessage && uwsReq) {
-      const proto = http.IncomingMessage.prototype
-      for (const p of getReqProtoProps()) {
-        if (!this[p]) this[p] = proto[p]
-      }
-    }
+  forceCache () {
+    if (this._headers === null) this._cacheHeaders()
+    if (this._spliffyUrl === null) this._cacheSpliffyUrl()
   }
 
   _cacheHeaders () {
@@ -60,7 +39,7 @@ export class SpliffyRequest {
   _cacheSpliffyUrl () {
     if (this._spliffyUrl === null) {
       const q = this._uwsReq.getQuery()
-      const p2i = this._pathParameters.reduce((acc, cur, i) => { acc[cur] = i; return acc }, {})
+      const p2i = this._paramToIndex
       const params = {}
       for (const name in p2i) {
         params[name] = this._uwsReq.getParameter(p2i[name])
@@ -82,12 +61,12 @@ export class SpliffyRequest {
   }
 
   get headers () {
-    this._cacheHeaders()
+    if (this._headers === null) this._cacheHeaders()
     return this._headers
   }
 
   get spliffyUrl () {
-    this._cacheSpliffyUrl()
+    if (this._spliffyUrl === null) this._cacheSpliffyUrl()
     return this._spliffyUrl
   }
 
@@ -114,8 +93,8 @@ export class SpliffyRequest {
   get (header) { return this.headers[header.toLowerCase()] }
 }
 
-export function decorateRequest (uwsReq, pathParameters, res, config) {
-  return new SpliffyRequest(uwsReq, pathParameters, res, config)
+export function decorateRequest (uwsReq, paramToIndex, res, config) {
+  return new SpliffyRequest(uwsReq, paramToIndex, res, config)
 }
 
 const resProto = {
@@ -127,33 +106,83 @@ const resProto = {
   getHeader (h) { return this.headers[h.toLowerCase()] },
   status (c) { this.statusCode = c; return this },
   writeHead (s, h) { this.statusCode = s; if (h) this.assignHeaders(h) },
-  flushHeaders () {
+  redirect (c, l) {
+    if (typeof c === 'string') { l = c; c = 301 }
+    return this._finalizeResponse(this._sReq, this, { statusCode: c, headers: { location: l } })
+  },
+  send (b) { return this._finalizeResponse(this._sReq, this, b) },
+  json (b) { return this._finalizeResponse(this._sReq, this, b) },
+  setCookie (n, v, o) {
+    const s = cookie.serialize(n, v, o)
+    const e = this.headers['set-cookie']
+    if (e) {
+      if (Array.isArray(e)) e.push(s)
+      else this.headers['set-cookie'] = [e, s]
+    } else this.headers['set-cookie'] = s
+  },
+  cookie (n, v, o) { return this.setCookie(n, v, o) },
+  flushHeaders (noCork) {
     if (this.headersSent) return
     this.headersSent = true
-    if (this.statusCode && this.statusCode !== 200) {
-      this.writeStatus(this.statusCode + ' ' + (defaultStatusMessages[this.statusCode] || ''))
-    }
-    for (const h in this.headers) {
-      const v = this.headers[h]
-      if (Array.isArray(v)) {
-        for (let i = 0; i < v.length; i++) this.writeHeader(h, String(v[i]))
-      } else {
-        try {
+    const flush = () => {
+      if (this.statusCode && this.statusCode !== 200) {
+        this.writeStatus(this.statusCode + ' ' + (defaultStatusMessages[this.statusCode] || ''))
+      }
+      const headers = this.headers
+      for (const h in headers) {
+        const v = headers[h]
+        if (Array.isArray(v)) {
+          for (let i = 0, l = v.length; i < l; i++) this.writeHeader(h, String(v[i]))
+        } else {
           this.writeHeader(h, String(v))
-        } catch (e) {
-          throw new Error(`Error writing header ${h}: ${e.message}`)
         }
       }
     }
+    if (noCork) flush()
+    else this.cork(flush)
   },
   ensureOnAborted () {
     if (this._onAbortedRegistered) return
     this._onAbortedRegistered = true
     this.onAborted(() => { this.ended = true; this.writableEnded = true; this.finalized = true })
+  },
+  write (chunk, encoding, cb) {
+    this.ensureOnAborted()
+    this.streaming = true
+    return this.cork(() => {
+      if (!this.headersSent) this.flushHeaders(true)
+      const result = this._uwsWrite((chunk instanceof Buffer || chunk instanceof Uint8Array || typeof chunk === 'string') ? chunk : JSON.stringify(chunk))
+      if (cb) cb()
+      return result
+    })
+  },
+  end (body) {
+    if (this.ended) return
+    this.ended = true
+    this.writableEnded = true
+    this.cork(() => {
+      if (!this.headersSent) this.flushHeaders(true)
+      this._uwsEnd(body || '')
+    })
+    if (this.onEnd) this.onEnd()
+  },
+  getWritable () {
+    this.ensureOnAborted()
+    if (!this.outStream) {
+      this.streaming = true
+      this.outStream = new Writable({ write: (c, e, callback) => { this.write(c, e, callback) } })
+        .on('finish', () => this.end())
+        .on('error', e => { try { this.outStream.destroy() } finally { this._endError(this, e, uuid(), this._errorTransformer) } })
+    }
+    return this.outStream
   }
 }
 
-export function decorateResponse (res, req, finalizeResponse, errorTransformer, endError, config) {
+export function decorateResponse (res, sReq, finalizeResponse, errorTransformer, endError, config) {
+  res._sReq = sReq
+  res._finalizeResponse = finalizeResponse
+  res._errorTransformer = errorTransformer
+  res._endError = endError
   res._onAbortedRegistered = false
   res.ensureOnAborted = resProto.ensureOnAborted
   res.acceptsDefault = config.acceptsDefault
@@ -166,56 +195,20 @@ export function decorateResponse (res, req, finalizeResponse, errorTransformer, 
   res.status = resProto.status
   res.writeHead = resProto.writeHead
   res.flushHeaders = resProto.flushHeaders
+  res.redirect = resProto.redirect
+  res.send = resProto.send
+  res.json = resProto.json
+  res.setCookie = resProto.setCookie
+  res.cookie = resProto.cookie
 
-  const uwsWrite = res.write
-  res.write = (chunk, encoding, cb) => {
-    res.ensureOnAborted()
-    res.cork(() => {
-      res.streaming = true
-      if (!res.headersSent) res.flushHeaders()
-      uwsWrite.call(res, (chunk instanceof Buffer || chunk instanceof Uint8Array || typeof chunk === 'string') ? chunk : JSON.stringify(chunk))
-      if (typeof cb === 'function') cb()
-    })
-  }
+  res._uwsWrite = res.write
+  res.write = resProto.write
 
-  res.getWritable = () => {
-    res.ensureOnAborted()
-    if (!res.outStream) {
-      res.streaming = true
-      res.outStream = new Writable({ write: (c, e, callback) => { res.write(c, e, callback) } })
-        .on('finish', () => res.end())
-        .on('error', e => { try { res.outStream.destroy() } finally { endError(res, e, uuid(), errorTransformer) } })
-    }
-    return res.outStream
-  }
+  res.getWritable = resProto.getWritable
 
-  const uwsEnd = res.end
+  res._uwsEnd = res.end
   res.ended = false
-  res.end = body => {
-    if (res.ended) return
-    res.ended = true
-    res.writableEnded = true
-    res.cork(() => {
-      if (!res.headersSent) res.flushHeaders()
-      uwsEnd.call(res, body || '')
-      if (typeof res.onEnd === 'function') res.onEnd()
-    })
-  }
+  res.end = resProto.end
 
-  res.redirect = (c, l) => {
-    if (typeof c === 'string') { l = c; c = 301 }
-    return finalizeResponse(req, res, { statusCode: c, headers: { location: l } })
-  }
-  res.send = (b) => finalizeResponse(req, res, b)
-  res.json = res.send
-  res.setCookie = (n, v, o) => {
-    const s = cookie.serialize(n, v, o)
-    const e = res.headers['set-cookie']
-    if (e) {
-      if (Array.isArray(e)) e.push(s)
-      else res.headers['set-cookie'] = [e, s]
-    } else res.headers['set-cookie'] = s
-  }
-  res.cookie = res.setCookie
   return res
 }

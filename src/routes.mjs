@@ -113,6 +113,10 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
   }
   const route = {
     pathParameters,
+    paramToIndex: pathParameters.reduce((acc, cur, i) => {
+      acc[cur] = i
+      return acc
+    }, {}),
     urlPath: `${urlPath}/${getPathPart(name)}`,
     filePath,
     handlers: {}
@@ -163,6 +167,10 @@ const buildStaticRoutes = (name, filePath, urlPath, inheritedMiddleware, pathPar
   const contentType = getContentTypeByExtension(name, config.staticContentTypes)
   const route = {
     pathParameters,
+    paramToIndex: pathParameters.reduce((acc, cur, i) => {
+      acc[cur] = i
+      return acc
+    }, {}),
     urlPath: `${urlPath}/${getPathPart(name)}`,
     filePath,
     handlers: createStaticHandler(filePath, contentType, config.cacheStatic, config.staticCacheControl),
