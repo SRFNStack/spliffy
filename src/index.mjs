@@ -29,3 +29,5 @@ export { default } from './start.mjs'
  * @return {string} The full path to the directory the module is in
  */
 export const moduleDirname = metaUrl => path.dirname(fileURLToPath(metaUrl))
+
+export * from './errors.mjs'
