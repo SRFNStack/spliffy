@@ -36,6 +36,7 @@ export class SpliffyRequest {
   forceCache () {
     if (this._headers === null) this._cacheHeaders()
     if (this._spliffyUrl === null) this._cacheSpliffyUrl()
+    this._spliffyUrl._readQueryString()
     if (this._url === null) this._cacheUrl()
   }
 
@@ -60,7 +61,7 @@ export class SpliffyRequest {
         if (params === null) params = {}
         params[name] = this._uwsReq.getParameter(p2i[name])
       }
-      this._spliffyUrl = new SpliffyUrl(this.path, this._uwsReq.getQuery(), params, this._config.decodeQueryParameters)
+      this._spliffyUrl = new SpliffyUrl(this.path, this._uwsReq, params, this._config.decodeQueryParameters)
     }
   }
 
@@ -109,21 +110,27 @@ export class SpliffyRequest {
 }
 
 /**
- * The url passed to handlers. The query string is read up front, since the uws request does not
- * outlive the handler call, but only parsed when something asks for it.
+ * The url passed to handlers. The query string is only read from the uws request when something
+ * asks for it, or when the request is cached because the handler outlives the uws request.
  */
 export class SpliffyUrl {
-  constructor (path, queryString, params, decodeQueryParameters) {
+  constructor (path, uwsReq, params, decodeQueryParameters) {
     this.path = path
-    this._queryString = queryString
+    this._uwsReq = uwsReq
+    this._queryString = null
     this._query = null
     this._decode = decodeQueryParameters
     // a closure rather than a method so handlers can destructure it: ({ url: { param } }) => param('id')
     this.param = params === null ? noParam : name => params[name]
   }
 
+  _readQueryString () {
+    if (this._queryString === null) this._queryString = this._uwsReq.getQuery()
+  }
+
   get query () {
     if (this._query === null) {
+      this._readQueryString()
       this._query = (this._queryString && parseQuery(this._queryString, this._decode)) || {}
     }
     return this._query
