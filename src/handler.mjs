@@ -1,7 +1,7 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
 import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
-import { responseProto, SpliffyRequest, HandlerContext, uwsCallback } from './decorator.mjs'
+import { responseProto, decorateResponse, isDecorated, SpliffyRequest, HandlerContext, uwsCallback } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
 import { defaultStatusMessages } from './httpStatusCodes.mjs'
 import stream from 'stream'
@@ -254,14 +254,14 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
   const noBody = method === 'GET' || method === 'HEAD'
   const errorTransformer = config.errorTransformer
   const acceptsDefault = config.acceptsDefault
-  let resProto = null
+  // the raw uws end of the last response seen: http and https responses have different prototypes
+  let rawProto = null
   let uwsEnd = null
 
   // turn the uws response into a spliffy response, once
   const decorate = res => {
-    if (Object.getPrototypeOf(res) === resProto) return res
-    if (resProto === null) resProto = responseProto(res, config, finalizeResponse, endError)
-    Object.setPrototypeOf(res, resProto)
+    if (isDecorated(res)) return res
+    Object.setPrototypeOf(res, responseProto(res, config, finalizeResponse, endError))
     return res
   }
 
@@ -280,9 +280,13 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
       decorate(res).ensureOnAborted()
       handled.then(h => finalizeResponse(null, res, h, handler.statusCodeOverride))
         .catch(e => endError(res, e, uuid(), errorTransformer))
-    } else if (Object.getPrototypeOf(res) !== resProto && !handler.statusCodeOverride && !currentDate) {
+    } else if (!isDecorated(res) && !handler.statusCodeOverride && !currentDate) {
       // the handler never touched the response, so the answer is a single uws call
-      if (uwsEnd === null) uwsEnd = Object.getPrototypeOf(res).end
+      const proto = Object.getPrototypeOf(res)
+      if (proto !== rawProto) {
+        rawProto = proto
+        uwsEnd = proto.end
+      }
       if (typeof handled === 'string' || handled instanceof Buffer) {
         uwsEnd.call(res, handled)
       } else if (!handled) {
@@ -386,11 +390,10 @@ export const createNotFoundHandler = config => {
     }
     return notFoundRoute
   }
-  let resProto = null
   return (res, req) => {
     uwsCallback.active = true
     try {
-      Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
+      decorateResponse(res, config, finalizeResponse, endError)
       const sReq = new SpliffyRequest(req, {}, res, config)
       const handler = pickHandler(sReq)
       if (handler) sReq._paramToIndex = handler.paramToIndex || {}

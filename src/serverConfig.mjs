@@ -99,8 +99,8 @@ export async function initConfig (userConfig) {
     config.allowTestFileRoutes = false
   }
   config.port = config.port || 10420
-  if (!config.httpPort) {
-    config.httpPort = config.port - 1
+  if (!('staticPrecompressed' in config)) {
+    config.staticPrecompressed = false
   }
 
   if (!('autoOptions' in config)) {
@@ -113,6 +113,11 @@ export async function initConfig (userConfig) {
 
   if ((config.httpsKeyFile && !config.httpsCertFile) || (!config.httpsKeyFile && config.httpsCertFile)) {
     throw new Error('You must provide both httpsKeyFile and httpsCertFile')
+  }
+  config.httpsPort = config.httpsPort || 14420
+  if (!('httpRedirect' in config)) {
+    // with https configured the http port redirects unless told to serve the routes as well
+    config.httpRedirect = true
   }
   return config
 }

@@ -50,10 +50,11 @@ export default div(
 `, null, '100%'
   ),
   ul(
-    li(strong('port'), ': The port for the http server to listen on'),
-    li(strong('httpsPort'), ': The port to listen on for https'),
-    li(strong('httpsKeyFile'), ': (Optional for manual config) The path to the key file to use for https'),
-    li(strong('httpsCertFile'), ': (Optional for manual config) The path to the certificate file to use for https'),
+    li(strong('port'), ': The port for the http server to listen on. Default 10420.'),
+    li(strong('httpsPort'), ': The port to listen on for https when httpsKeyFile and httpsCertFile are set. Every route is served there, TLS 1.2 and 1.3. Default 14420.'),
+    li(strong('httpsKeyFile'), ': The path to the PEM key file to use for https'),
+    li(strong('httpsCertFile'), ': The path to the PEM certificate file to use for https'),
+    li(strong('httpRedirect'), ': With https configured, whether the http port answers with a 301 to the https url. Set to false to serve every route on both ports. Default true.'),
     li(strong('routeDir'), ': The directory the routes are contained in, should be an absolute path'),
     li(strong('logLevel'),
       ': The level at which to log. One of ["ERROR","WARN","INFO","DEBUG"].',
@@ -102,9 +103,10 @@ export default div(
       ': if true, the server will only serve static content and will not execute js request handlers. '),
     li(strong('decodeQueryParameters'),
       ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.'),
-    li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.'),
+    li(strong('cacheStatic'), ': cache static files in memory to increase performance. The cache follows the disk: each request stats the file and a changed file is read again. false by default.'),
+    li(strong('staticPrecompressed'), ': serve a .br or .gz file sitting next to a static file when the request accepts that encoding, with the original content type and a matching content-encoding. The twins are not routes of their own. false by default.'),
     li(strong('declarativeStatic'), ': with cacheStatic, serve static files as declarative responses that run inside µWebSockets.js with no javascript per request. ' +
-      'Conditional requests get the file again instead of a 304. Files on routes with middleware, the notFoundRoute and the defaultRoute are served the usual way. true by default.'),
+      'Conditional requests get the file again instead of a 304, and the file is read once at startup. Files on routes with middleware, the notFoundRoute, the defaultRoute and files with precompressed twins are served the usual way. true by default.'),
     li(strong('declarativeStaticMaxSize'), ': the largest file, in bytes, served as a declarative response. 65535 by default, the most one response instruction carries; ' +
       'bigger files can be allowed but go out with chunked transfer encoding instead of a content-length.'),
     li(strong('extendIncomingMessage'), ': Apply the prototype of IncomingMessage to enable middleware that pollutes the prototype (like passportjs), default false.'),

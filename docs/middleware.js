@@ -97,5 +97,27 @@ export default {
     }
 }
 `
+  ),
+  h3('Compression'),
+  p(
+    'Spliffy ships a compression middleware. It compresses responses the client accepts compressed, brotli first and gzip second, ',
+    'for text, json, javascript, xml and svg content types bigger than a threshold. A body sent in one piece is compressed in one call, a streamed body goes through a zlib stream. ',
+    'Responses that already carry a content-encoding, like precompressed static files, are left alone.'
+  ),
+  prismCode(
+    `
+import { compression } from '@srfnstack/spliffy'
+
+// www/api/compress.mw.mjs, or in the config middleware for every route
+export const middleware = [
+    compression({
+        encodings: ['br', 'gzip'],   // in order of preference, default ['br', 'gzip']
+        threshold: 1024,             // smallest body to compress, default 1024
+        brotli: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }, // zlib brotli options, default quality 4
+        gzip: { level: 6 },          // zlib gzip options, default level 6
+        filter: contentType => contentType.startsWith('text/') // replaces the content type test
+    })
+]
+`
   )
 )

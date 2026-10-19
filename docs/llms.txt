@@ -2,11 +2,11 @@
 
 > Spliffy is a Node.js web framework on top of µWebSockets.js. Routes are files: a directory of
 > `.rt.mjs` handler files and static assets becomes the URL space of the server, like Apache or PHP.
-> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.5.1.
+> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.6.0.
 
 The documentation site (https://srfnstack.github.io/spliffy/) is a client rendered single page app,
 so this file is the complete reference, not a table of contents. Everything below is checked
-against the 1.5.1 source. The package has no TypeScript types.
+against the 1.6.0 source. The package has no TypeScript types.
 
 ## Links
 
@@ -394,6 +394,22 @@ Semantics:
 - A route with any middleware takes the slower general path (body is always read before the
   handler runs). Keep hot JSON endpoints middleware free when it matters.
 
+Compression is built in. `compression()` from the package is middleware that compresses responses the
+client accepts compressed, brotli first then gzip, for text, json, javascript, xml and svg content
+types above a threshold:
+
+```js
+import { compression } from '@srfnstack/spliffy'
+// www/api/compress.mw.mjs, or in the config middleware for every route
+export const middleware = [compression({ threshold: 1024, encodings: ['br', 'gzip'] })]
+```
+
+Options: `encodings` [`['br', 'gzip']`] in order of preference, `threshold` [1024] bytes, `brotli`
+and `gzip` are passed to zlib (defaults brotli quality 4, gzip level 6), `filter(contentType)`
+replaces the content type test. A body sent in one piece is compressed in one call. A body written
+in pieces or streamed goes through a zlib stream. Responses that already carry a `content-encoding`
+(precompressed static files) are left alone. A `vary: accept-encoding` header is added.
+
 A typical auth middleware:
 
 ```js
@@ -423,13 +439,21 @@ Any file under `routeDir` that is not a handler or middleware module is served o
   file names, otherwise a deploy leaves clients running old modules for up to ten minutes.
 - Without `cacheStatic` the file is stat'ed and streamed from disk on every request and the ETag
   comes from size and mtime, so edits show up immediately.
-- `cacheStatic: true` reads each file into memory on first request and keeps it. Edits are not
-  seen until restart. Production apps set `cacheStatic: process.env.NODE_ENV === 'production'`.
-- With `cacheStatic`, files up to `declarativeStaticMaxSize` (1 MiB) are also compiled into
+- `cacheStatic: true` reads each file into memory on first request and keeps it. The cache follows
+  the disk: every request stats the file and a changed mtime, size or inode makes the next
+  response read it again, so a replaced file is served on the very next request.
+- With `cacheStatic`, files up to `declarativeStaticMaxSize` (64 KiB) are also compiled into
   declarative responses served inside uws with no JavaScript per request. Those cannot compare
-  ETags, so conditional requests get a 200 with the full file instead of a 304. Set
-  `declarativeStatic: false` to keep 304s. Files under middleware, the `notFoundRoute` and the
-  `defaultRoute` are never compiled.
+  ETags, so conditional requests get a 200 with the full file instead of a 304, and they are read
+  once at startup, so a replaced file is only seen after a restart. Set `declarativeStatic: false`
+  to keep 304s and follow the disk. Files under middleware, the `notFoundRoute`, the
+  `defaultRoute` and files with precompressed twins are never compiled.
+- `staticPrecompressed: true` serves a `.br` or `.gz` file sitting next to the original when the
+  request accepts that encoding, with the original's content type, a matching `content-encoding`
+  and `vary: accept-encoding`. `app.js.br` answers `/app.js` for `accept-encoding: br` and is not a
+  route of its own. Brotli is preferred over gzip. The twins are cached and revalidated like the
+  original.
+- A symlinked directory under `routeDir` is walked like any other directory.
 - `index.*` files answer for their folder: `www/app/index.html` serves `/app`, `/app/`,
   `/app/index` and `/app/index.html`.
 - `resolveWithoutExtension: ['.js']` makes `/foo.js` also answer at `/foo`. `.html` and `.htm` are
@@ -597,8 +621,13 @@ Only `routeDir` is required. Defaults in brackets.
 
 Server
 - `routeDir` absolute path to the route directory, required
-- `port` [10420]
+- `port` [10420] http port
 - `host` [`::`] listen address
+- `httpsKeyFile`, `httpsCertFile` PEM files, both or neither. With them a TLS listener (TLS 1.2 and
+  1.3, no ALPN) serves every route on `httpsPort`
+- `httpsPort` [14420]
+- `httpRedirect` [true] with https, `port` answers 301 to the https url. `false` serves every route
+  on both ports
 - `serveRoutesWithSlash` [false] folder index routes also answer with a trailing slash (`/foo/` as well as `/foo`)
 - `autoOptions` [false] generate `OPTIONS` handlers answering 204 with `Allow`
 - `writeDateHeader` [false] add a `Date` header, refreshed once a second
@@ -619,12 +648,15 @@ Routing
 Static files
 - `staticCacheControl` [`max-age=600`] `Cache-Control` for static files
 - `staticContentTypes` [{}] `{ '.ext': 'type/subtype' }` additions and overrides
-- `cacheStatic` [false] keep file contents in memory after first read
-- `declarativeStatic` [true] with `cacheStatic`, serve small files from inside uws (no 304s)
-- `declarativeStaticMaxSize` [1048576] largest file compiled into a declarative response
+- `cacheStatic` [false] keep file contents in memory, revalidated with a stat per request
+- `staticPrecompressed` [false] serve `.br` and `.gz` twins by accept-encoding
+- `declarativeStatic` [true] with `cacheStatic`, serve small files from inside uws (no 304s, never re-read)
+- `declarativeStaticMaxSize` [65535] largest file compiled into a declarative response
 
 Bodies and errors
-- `contentHandlers` [json, text, form, octet-stream] `{ 'type/subtype': { deserialize, serialize } }`
+- `contentHandlers` [json, text, form, octet-stream] `{ 'type/subtype': { deserialize, serialize } }`.
+  `application/octet-stream` bodies are handed over as the `Buffer` that arrived, and an empty body
+  is an empty `Buffer` whatever the content type
 - `acceptsDefault` [`*/*`] handler used when a request has no `content-type`
 - `defaultContentType` [`*/*`] handler used when a response has no `content-type`
 - `errorTransformer` [identity] `(err, refId) => err`
@@ -634,9 +666,8 @@ Logging
 - `logLevel` [`INFO`]
 - `logger` [built in]
 
-Not functional in 1.5.0, accepted but ignored: `parseCookie` (cookies are always available),
-`decodePathParameters`, `logAccess`, a top level `routePrefix`, `httpsPort`. TLS should be
-terminated by a reverse proxy in front of spliffy.
+Not functional in 1.6.0, accepted but ignored: `parseCookie` (cookies are always available),
+`decodePathParameters`, `logAccess`, a top level `routePrefix`.
 
 ## Package exports
 
@@ -644,6 +675,7 @@ terminated by a reverse proxy in front of spliffy.
 import spliffy, {
   log, redirect, moduleDirname,
   declarative, compileResponse,
+  compression, pickEncoding,
   parseQuery, setMultiValueKey,
   HttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, /* ...every 4xx and 5xx */
 } from '@srfnstack/spliffy'
@@ -651,6 +683,8 @@ import spliffy, {
 
 - `moduleDirname(import.meta.url)` is `path.dirname(fileURLToPath(url))`, handy for `routeDir`.
 - `parseQuery(string, decode)` is the query parser used for `url.query`.
+- `compression(options)` is the response compression middleware, see Middleware.
+- `pickEncoding(acceptEncoding, ['br', 'gzip'])` picks the first offered encoding the header accepts.
 
 ## Project conventions that work well
 

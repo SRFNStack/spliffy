@@ -324,6 +324,11 @@ const protoCache = new WeakMap()
 const SPLIFFY_PROTO = Symbol('spliffyResponseProto')
 
 /**
+ * Whether the response already carries the spliffy prototype
+ */
+export const isDecorated = res => Object.getPrototypeOf(res)[SPLIFFY_PROTO] === true
+
+/**
  * Get the spliffy response prototype for the given uws response. Built once per uws prototype and
  * config, then reused for every request.
  */

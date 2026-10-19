@@ -39,18 +39,21 @@ const optionsHandler = (config, middleware, methods) => {
   )
 }
 
-const startHttpRedirect = (host, port) => {
+const startHttpRedirect = (host, port, httpsPort) => {
   // redirect http to https
   uws.App().any('/*',
-    (req, res) => {
+    (res, req) => {
       try {
-        res.writeHead(301, { Location: `https://${req.headers.get('host')}:${port}${req.url}` })
-        res.end()
+        const hostHeader = req.getHeader('host').split(':')[0] || 'localhost'
+        const query = req.getQuery()
+        res.writeStatus('301 Moved Permanently')
+          .writeHeader('location', `https://${hostHeader}:${httpsPort}${req.getUrl()}${query ? '?' + query : ''}`)
+          .end()
       } catch (e) {
-        log.error(`Failed to handle http request on port ${port}`, req.url, e)
+        log.error(`Failed to handle http request on port ${port}`, e)
       }
     }
-  ).listen(host || '0.0.0.0', port, (token) => {
+  ).listen(host || '::', port, (token) => {
     if (token) {
       log.gne(`Http redirect server initialized at ${new Date().toISOString()} and listening on port ${port}`)
     } else {
@@ -63,8 +66,8 @@ const getHttpsApp = (key, cert) => {
   const keyPath = path.resolve(key)
   const certPath = path.resolve(cert)
   if (!fs.existsSync(keyPath)) throw new Error(`Can't find https key file: ${keyPath}`)
-  if (!fs.existsSync(certPath)) throw new Error(`Can't find https cert file: ${keyPath}`)
-  return uws.App({
+  if (!fs.existsSync(certPath)) throw new Error(`Can't find https cert file: ${certPath}`)
+  return uws.SSLApp({
     key_file_name: keyPath,
     cert_file_name: certPath
   })
@@ -82,14 +85,23 @@ export async function startServer (config) {
   if (!state.initialized) {
     state.initialized = true
     const routes = [...getNodeModuleRoutes(config), ...(await findRoutes(config))]
-    let app, port
+    // every listener gets the same routes: https on httpsPort, and http on port unless it redirects
+    const listeners = []
     if (config.httpsKeyFile) {
-      app = getHttpsApp(config.secure)
-      port = config.secure.port || 14420
-      startHttpRedirect(config.host, config.port || 10420)
+      listeners.push({ app: getHttpsApp(config.httpsKeyFile, config.httpsCertFile), port: config.httpsPort, name: 'https' })
+      if (config.httpRedirect) {
+        startHttpRedirect(config.host, config.port, config.httpsPort)
+      } else {
+        listeners.push({ app: uws.App(), port: config.port, name: 'http' })
+      }
     } else {
-      app = uws.App()
-      port = config.port || 10420
+      listeners.push({ app: uws.App(), port: config.port, name: 'http' })
+    }
+    // a declarative response is bytes uws keeps hold of, so each listener gets its own copy
+    const register = (method, urlPath, handler) => {
+      for (let i = 0; i < listeners.length; i++) {
+        listeners[i].app[method](urlPath, i > 0 && handler instanceof ArrayBuffer ? handler.slice(0) : handler)
+      }
     }
 
     for (const route of routes) {
@@ -125,19 +137,19 @@ export async function startServer (config) {
         } else {
           theHandler = createHandler(route.handlers[method], route.middleware, route.paramToIndex, config, route.urlPath, method)
         }
-        app[appMethods[method]](route.urlPath, theHandler)
+        register(appMethods[method], route.urlPath, theHandler)
         if (hadSlash && config.serveRoutesWithSlash) {
-          app[appMethods[method]](route.urlPath + '/', theHandler)
+          register(appMethods[method], route.urlPath + '/', theHandler)
         }
         if (route.urlPath.endsWith('/*')) {
-          app[appMethods[method]](route.urlPath.substr(0, route.urlPath.length - 2), theHandler)
+          register(appMethods[method], route.urlPath.substr(0, route.urlPath.length - 2), theHandler)
         }
       }
       if (config.autoOptions && !route.handlers.OPTIONS) {
         const theHandler = optionsHandler(config, route.middleware, Object.keys(route.handlers).join(', '))
-        app.options(route.urlPath, theHandler)
+        register('options', route.urlPath, theHandler)
         if (hadSlash && config.serveRoutesWithSlash) {
-          app.options(route.urlPath + '/', theHandler)
+          register('options', route.urlPath + '/', theHandler)
         }
       }
     }
@@ -146,17 +158,20 @@ export async function startServer (config) {
       log.warn('No route matched not found route: ' + config.notFoundRoute)
     }
     if (config.defaultRoute && !config.defaultRouteHandler) {
-      log.warn('No route matched default route: ' + config.notFoundRoute)
+      log.warn('No route matched default route: ' + config.defaultRoute)
     }
 
-    app.any('/*', createNotFoundHandler(config))
-    app.listen(config.host || '::', config.port, (token) => {
-      if (token) {
-        log.gne(`Server initialized at ${new Date().toISOString()} and listening on port ${port}`)
-      } else {
-        throw new Error(`Failed to start server on port ${port}`)
-      }
-    })
-    return app
+    const notFound = createNotFoundHandler(config)
+    for (const { app, port, name } of listeners) {
+      app.any('/*', notFound)
+      app.listen(config.host || '::', port, (token) => {
+        if (token) {
+          log.gne(`Server initialized at ${new Date().toISOString()} and listening for ${name} on port ${port}`)
+        } else {
+          throw new Error(`Failed to start server on port ${port}`)
+        }
+      })
+    }
+    return listeners[0].app
   }
 }

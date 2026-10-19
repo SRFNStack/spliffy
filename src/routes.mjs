@@ -32,14 +32,22 @@ const ignoreHandlerFields = { middleware: true, streamRequestBody: true }
 const isRouteFile = name => name.endsWith('.rt.js') || name.endsWith('.rt.mjs') || name.endsWith('.rt.cjs')
 const isMiddlewareFile = name => name.endsWith('.mw.js') || name.endsWith('.mw.mjs') || name.endsWith('.mw.cjs')
 
+// a symlink is whatever it points at, so a linked directory is walked like any other
+const isDirectory = (dirent, filePath) => dirent.isDirectory() || (dirent.isSymbolicLink() && fs.statSync(filePath).isDirectory())
+
+const PRECOMPRESSED = ['.br', '.gz']
+// with staticPrecompressed the .br and .gz twins are variants of the original, not files of their own
+const isPrecompressedTwin = (config, name, filePath) => config.staticPrecompressed &&
+  PRECOMPRESSED.some(ext => name.endsWith(ext) && fs.existsSync(filePath.slice(0, -ext.length)))
+
 const doFindRoutes = async (config, currentFile, filePath, urlPath, pathParameters, inheritedMiddleware) => {
   const routes = []
   const name = currentFile.name
-  if (currentFile.isDirectory()) {
+  if (isDirectory(currentFile, filePath)) {
     routes.push(...(await findRoutesInDir(name, filePath, urlPath, inheritedMiddleware, pathParameters, config)))
   } else if (!config.staticMode && isRouteFile(name)) {
     routes.push(await buildJSHandlerRoute(name, filePath, urlPath, inheritedMiddleware, pathParameters))
-  } else {
+  } else if (!isPrecompressedTwin(config, name, filePath)) {
     routes.push(...buildStaticRoutes(name, filePath, urlPath, inheritedMiddleware, pathParameters, config))
   }
   return routes
@@ -184,10 +192,12 @@ const buildStaticRoutes = (name, filePath, urlPath, inheritedMiddleware, pathPar
     }, {}),
     urlPath: `${urlPath}/${getPathPart(name)}`,
     filePath,
-    handlers: createStaticHandler(filePath, contentType, config.cacheStatic, config.staticCacheControl),
+    handlers: createStaticHandler(filePath, contentType, config.cacheStatic, config.staticCacheControl, config.staticPrecompressed),
     middleware: inheritedMiddleware
   }
-  if (config.cacheStatic && config.declarativeStatic) {
+  // a compiled response is one fixed body, so a file with precompressed variants to pick from stays a handler
+  const hasVariants = config.staticPrecompressed && PRECOMPRESSED.some(ext => fs.existsSync(filePath + ext))
+  if (config.cacheStatic && config.declarativeStatic && !hasVariants) {
     // the same response compiled to run inside uws, used when nothing has to run per request
     const compiled = compileStaticResponse(filePath, contentType, config.staticCacheControl, config.declarativeStaticMaxSize)
     if (compiled) route.declarativeHandlers = { GET: compiled }

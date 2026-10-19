@@ -63,7 +63,10 @@ const contentHandlers = {
     deserialize: s => s && s.toString(),
     serialize: o => o && o.toString()
   },
-  'application/octet-stream': defaultHandler,
+  'application/octet-stream': {
+    deserialize: s => s,
+    serialize: o => o
+  },
   'application/x-www-form-urlencoded': {
     deserialize: s => s && parseQuery(s.toString(), true),
     serialize: o => o && Object.keys(o).map(toFormData).flat().join('&')
@@ -102,6 +105,8 @@ export function serializeBody (content, contentType, acceptsDefault) {
 }
 
 export function deserializeBody (content, contentType, acceptsDefault) {
+  // an empty body is no body, whatever the content type says it would have been
+  if (content && content.length === 0) return content
   return getHandler(contentType && contentType.toLowerCase(), acceptsDefault).deserialize(content)
 }
 

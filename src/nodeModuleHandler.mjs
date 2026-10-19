@@ -89,7 +89,7 @@ export function getNodeModuleRoutes (config) {
             filePath,
             handlers: createStaticHandler(
               filePath, getContentTypeByExtension(lastPart, config.staticContentTypes),
-              config.cacheStatic, config.staticCacheControl
+              config.cacheStatic, config.staticCacheControl, config.staticPrecompressed
             ),
             middleware: mw
           })

@@ -2,11 +2,19 @@
 import spliffy, { moduleDirname } from '../src/index.mjs'
 import path from 'path'
 
+const dir = moduleDirname(import.meta.url)
+
 spliffy({
-  routeDir: path.join(moduleDirname(import.meta.url), 'bare', 'www'),
+  routeDir: path.join(dir, 'bare', 'www'),
   port: 11421,
+  // the same routes over tls, the http port keeps serving instead of redirecting
+  httpsPort: 11422,
+  httpsKeyFile: path.join(dir, 'bare', 'certs', 'server.key'),
+  httpsCertFile: path.join(dir, 'bare', 'certs', 'server.crt'),
+  httpRedirect: false,
   logAccess: false,
   cacheStatic: true,
+  staticPrecompressed: true,
   declarativeStaticMaxSize: 1024 * 1024,
   staticContentTypes: {
     '.txt': 'text/plain'

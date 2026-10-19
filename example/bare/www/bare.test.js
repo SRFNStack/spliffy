@@ -1,8 +1,17 @@
 const fetch = require('node-fetch')
 const fs = require('fs')
 const path = require('path')
+const https = require('https')
+const zlib = require('zlib')
+// the same payload compressed/big.rt.mjs builds, jest cannot import the module
+const items = []
+for (let i = 0; i < 300; i++) items.push({ id: i, name: `item ${i}`, tags: ['a', 'b', 'c'], price: i * 7 })
+const payload = { items, count: items.length }
 
 const base = 'http://localhost:11421'
+const tlsBase = 'https://localhost:11422'
+// the test certificate is self signed
+const agent = new https.Agent({ rejectUnauthorized: false })
 
 describe('routes with no middleware', () => {
   it('returns an empty 200 for an empty handler', async () => {
@@ -157,5 +166,127 @@ describe('routes with no middleware', () => {
     const aliased = await fetch(`${base}/lib/ext/etag.js`)
     expect(aliased.status).toBe(200)
     expect(await aliased.text()).toBe(etag)
+  })
+
+  it('serves the same routes over https', async () => {
+    const res = await fetch(`${tlsBase}/user/42`, { agent })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('42')
+    const post = await fetch(`${tlsBase}/echo`, { method: 'POST', body: '{"a":1}', headers: { 'content-type': 'application/json' }, agent })
+    expect(await post.json()).toEqual({ received: { a: 1 }, contentType: 'application/json' })
+    const missing = await fetch(`${tlsBase}/missing.js`, { agent })
+    expect(missing.status).toBe(404)
+    expect(await missing.text()).toBe('nope\n')
+    const compiled = await fetch(`${tlsBase}/static/hello.txt`, { agent })
+    expect(await compiled.text()).toBe('hello from a compiled static file\n')
+    const spa = await fetch(`${tlsBase}/nothing/here`, { agent })
+    expect(spa.status).toBe(200)
+    // and http still answers too
+    expect((await fetch(`${base}/user/42`)).status).toBe(200)
+  })
+
+  it('echoes octet-stream bodies byte for byte', async () => {
+    for (const size of [1, 1024, 10240, 102400]) {
+      const body = require('crypto').randomBytes(size)
+      const res = await fetch(`${base}/bin`, { method: 'POST', body, headers: { 'content-type': 'application/octet-stream' } })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toBe('application/octet-stream')
+      expect(Buffer.compare(await res.buffer(), body)).toBe(0)
+    }
+    const empty = await fetch(`${base}/bin`, { method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': '0' } })
+    expect(empty.status).toBe(200)
+    expect((await empty.buffer()).length).toBe(0)
+    // an empty body is empty whatever content type it claims
+    const emptyForm = await fetch(`${base}/bin`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'content-length': '0' } })
+    expect(emptyForm.status).toBe(200)
+    expect((await emptyForm.buffer()).length).toBe(0)
+    // a body that happens to look like json stays bytes
+    const digits = await fetch(`${base}/bin`, { method: 'POST', body: '123', headers: { 'content-type': 'application/octet-stream' } })
+    expect(await digits.text()).toBe('123')
+    expect(digits.headers.get('content-type')).toBe('application/octet-stream')
+  })
+
+  it('walks symlinked directories', async () => {
+    const res = await fetch(`${base}/linked/linked.txt`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('served through a symlink\n')
+  })
+
+  it('serves precompressed variants and follows the disk', async () => {
+    const dir = path.join(__dirname, 'assets')
+    const css = fs.readFileSync(path.join(dir, 'site.css'))
+    const plain = await fetch(`${base}/assets/site.css`, { compress: false })
+    expect(plain.headers.get('content-type')).toBe('text/css')
+    expect(plain.headers.get('content-encoding')).toBe(null)
+    expect(plain.headers.get('vary')).toBe('accept-encoding')
+    expect(Buffer.compare(await plain.buffer(), css)).toBe(0)
+
+    const br = await fetch(`${base}/assets/site.css`, { compress: false, headers: { 'accept-encoding': 'br;q=1, gzip;q=0.8' } })
+    expect(br.headers.get('content-encoding')).toBe('br')
+    expect(br.headers.get('content-type')).toBe('text/css')
+    expect(Buffer.compare(zlib.brotliDecompressSync(await br.buffer()), css)).toBe(0)
+
+    const gz = await fetch(`${base}/assets/site.css`, { compress: false, headers: { 'accept-encoding': 'gzip, deflate' } })
+    expect(gz.headers.get('content-encoding')).toBe('gzip')
+    expect(Buffer.compare(zlib.gunzipSync(await gz.buffer()), css)).toBe(0)
+
+    const none = await fetch(`${base}/assets/site.css`, { compress: false, headers: { 'accept-encoding': 'br;q=0, gzip;q=0' } })
+    expect(none.headers.get('content-encoding')).toBe(null)
+
+    // a file with no twins is sent as is, and the twins are not routes of their own
+    const noTwin = await fetch(`${base}/assets/plain.css`, { compress: false, headers: { 'accept-encoding': 'br' } })
+    expect(noTwin.headers.get('content-encoding')).toBe(null)
+    expect(await noTwin.text()).toBe('.only { color: red }\n')
+    expect((await fetch(`${base}/assets/site.css.br`)).status).toBe(404)
+
+    // replace the file and its twins with different bytes of the same length: the next response has them
+    const backup = {}
+    for (const ext of ['', '.br', '.gz']) backup[ext] = fs.readFileSync(path.join(dir, 'site.css' + ext))
+    try {
+      const replaced = {}
+      for (const ext of ['', '.br', '.gz']) {
+        replaced[ext] = require('crypto').randomBytes(backup[ext].length)
+        const tmp = path.join(dir, 'tmp' + ext)
+        fs.writeFileSync(tmp, replaced[ext])
+        fs.renameSync(tmp, path.join(dir, 'site.css' + ext))
+      }
+      const fresh = await fetch(`${base}/assets/site.css`, { compress: false })
+      expect(Buffer.compare(await fresh.buffer(), replaced[''])).toBe(0)
+      const freshBr = await fetch(`${base}/assets/site.css`, { compress: false, headers: { 'accept-encoding': 'br' } })
+      expect(Buffer.compare(await freshBr.buffer(), replaced['.br'])).toBe(0)
+    } finally {
+      for (const ext of ['', '.br', '.gz']) fs.writeFileSync(path.join(dir, 'site.css' + ext), backup[ext])
+    }
+    const restored = await fetch(`${base}/assets/site.css`, { compress: false })
+    expect(Buffer.compare(await restored.buffer(), css)).toBe(0)
+  })
+
+  it('compresses responses with the compression middleware', async () => {
+    const text = JSON.stringify(payload)
+    const none = await fetch(`${base}/compressed/big`, { compress: false })
+    expect(none.headers.get('content-encoding')).toBe(null)
+    expect(await none.text()).toBe(text)
+
+    const br = await fetch(`${base}/compressed/big`, { compress: false, headers: { 'accept-encoding': 'gzip, br' } })
+    expect(br.headers.get('content-encoding')).toBe('br')
+    expect(br.headers.get('content-type')).toBe('application/json')
+    expect(br.headers.get('vary')).toBe('accept-encoding')
+    expect(zlib.brotliDecompressSync(await br.buffer()).toString()).toBe(text)
+
+    const gz = await fetch(`${base}/compressed/big`, { compress: false, headers: { 'accept-encoding': 'gzip' } })
+    expect(gz.headers.get('content-encoding')).toBe('gzip')
+    expect(zlib.gunzipSync(await gz.buffer()).toString()).toBe(text)
+
+    const tiny = await fetch(`${base}/compressed/big`, { method: 'POST', compress: false, headers: { 'accept-encoding': 'gzip, br' } })
+    expect(tiny.headers.get('content-encoding')).toBe(null)
+    expect(await tiny.text()).toBe('tiny')
+
+    const streamed = await fetch(`${base}/compressed/big`, { method: 'PUT', compress: false, headers: { 'accept-encoding': 'gzip' } })
+    expect(streamed.headers.get('content-encoding')).toBe('gzip')
+    expect(zlib.gunzipSync(await streamed.buffer()).toString()).toBe(text)
+
+    const binary = await fetch(`${base}/compressed/big`, { method: 'PATCH', compress: false, headers: { 'accept-encoding': 'gzip, br' } })
+    expect(binary.headers.get('content-encoding')).toBe(null)
+    expect((await binary.buffer()).length).toBe(4096)
   })
 })
