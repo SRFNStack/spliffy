@@ -2,11 +2,11 @@
 
 > Spliffy is a Node.js web framework on top of µWebSockets.js. Routes are files: a directory of
 > `.rt.mjs` handler files and static assets becomes the URL space of the server, like Apache or PHP.
-> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.5.0.
+> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.5.1.
 
 The documentation site (https://srfnstack.github.io/spliffy/) is a client rendered single page app,
 so this file is the complete reference, not a table of contents. Everything below is checked
-against the 1.5.0 source. The package has no TypeScript types.
+against the 1.5.1 source. The package has no TypeScript types.
 
 ## Links
 
@@ -442,10 +442,13 @@ Any file under `routeDir` that is not a handler or middleware module is served o
 Both options name a URL path that must match an existing route (a file in `routeDir`, static or
 handler). Spliffy warns at startup when nothing matches.
 
-- `notFoundRoute: '/404.html'`: served with status 404 for any path with no route.
-- `defaultRoute: '/index.html'`: served with status 200 for any path with no route. This is the
-  SPA fallback. It wins over `notFoundRoute`, so an unknown `/api/whatever` also gets the HTML
-  with a 200. Keep API routes under a catch-all (`api+.rt.mjs`) that returns 404 if that matters.
+- `notFoundRoute: '/404.html'`: served with status 404 for any request with no route.
+- `defaultRoute: '/index.html'`: served with status 200 for GET requests with no route whose last
+  path segment has no file extension. This is the SPA fallback: `/users/42` gets the shell, while
+  `/missing.js`, `/img/logo.png` and any POST fall through to `notFoundRoute` (or a bare 404).
+- `defaultRouteIgnore: ['/api', /^\/internal\//]`: paths the default route must not answer. String
+  entries are prefixes, regular expressions are tested against the path. Those requests also fall
+  through to `notFoundRoute`.
 - The default route handler sees the originally requested path in `req.path`, so one handler can
   pick between several SPA shells:
 
@@ -472,7 +475,7 @@ export default {
 
 ```js
 nodeModuleRoutes: {
-  nodeModulesPath: path.join(projectRoot, 'node_modules'),  // default: routeDir/../node_modules
+  nodeModulesPath: path.join(projectRoot, 'node_modules'),  // optional, see below
   routePrefix: 'vendor',                                     // default: 'lib/ext'
   files: [
     'htmx.org/dist/htmx.min.js',                             // -> /vendor/htmx.org/dist/htmx.min.js
@@ -483,9 +486,10 @@ nodeModuleRoutes: {
 }
 ```
 
-- The default `nodeModulesPath` is `routeDir/../node_modules`. With the common layout
-  `routeDir: './src/public'` that resolves to `src/node_modules`, which does not exist and the
-  server throws `Unable to find node_modules dir`. Set it explicitly.
+- Without `nodeModulesPath`, every `node_modules` directory from `routeDir` up to the filesystem
+  root is searched, nearest first, the way node resolves packages. `routeDir: './src/public'`
+  finds the project's `node_modules` on its own. Set `nodeModulesPath` only to serve from one
+  specific directory; the server then throws `Unable to find node_modules dir` if it is missing.
 - A listed file that does not exist is a warning, not an error.
 - `method: 'copy'` writes the files under `routeDir/<routePrefix>/...` and they are then served as
   ordinary static files. Add that folder to `.gitignore`.
@@ -602,8 +606,9 @@ Server
 - `middleware` [none] array or `{ METHOD: [...] }` applied to every route
 
 Routing
-- `defaultRoute` path of an existing route served with 200 for unmatched requests (SPA fallback), wins over `notFoundRoute`
-- `notFoundRoute` path of an existing route served with 404 for unmatched requests
+- `defaultRoute` path of an existing route served with 200 for unmatched extensionless GET requests (SPA fallback)
+- `defaultRouteIgnore` [[]] path prefixes or regexes the default route must not answer
+- `notFoundRoute` path of an existing route served with 404 for every other unmatched request
 - `resolveWithoutExtension` [`['.html', '.htm']`, always included] extensions that also resolve without the extension
 - `ignoreFilesMatching` [[]] regex strings tested against file names to skip
 - `allowTestFileRoutes` [false] stop skipping `*.test.js` and `*.test.mjs`
@@ -671,8 +676,10 @@ Seen across several production spliffy apps:
   but only with `serveRoutesWithSlash: true`.
 - Returning `{ contentType: 'text/html', body }`. Put the type in `headers`.
 - Returning a data object that has a `body` or `headers` key and getting it unwrapped.
-- Setting `defaultRoute` and then wondering why unknown API paths return HTML with a 200.
-- Using `nodeModuleRoutes` with `routeDir: 'src/public'` and not setting `nodeModulesPath`.
+- Setting `defaultRoute` and expecting a POST or a request for `/missing.js` to get the shell.
+  Only extensionless GETs do; add `/api` style prefixes to `defaultRouteIgnore`.
+- Adding a file to `routeDir` while the server runs. The route table is built once at startup,
+  so the new file is unknown until a restart.
 - Shipping ES modules with `cacheStatic` and the default ten minute `Cache-Control`, then
   deploying. Use `staticCacheControl: 'no-cache'` or hashed file names.
 - Forgetting `res.end()` after manual `res.write()` calls, or forgetting `res.streaming = true`.

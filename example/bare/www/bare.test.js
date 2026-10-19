@@ -124,4 +124,38 @@ describe('routes with no middleware', () => {
     expect(await (await fetch(`${base}/streams`, { method: 'PATCH', body: 'streamed in' })).json()).toEqual({ got: 'streamed in' })
     expect(await (await fetch(`${base}/streams`, { method: 'DELETE' })).text()).toBe('late')
   })
+
+  it('answers navigation requests for unknown paths with the default route', async () => {
+    const shell = fs.readFileSync(path.join(__dirname, 'app.html'), 'utf-8')
+    for (const p of ['/nothing/here', '/users/42', '/v1.2/things', '/.well-known/x', '/deep/path/']) {
+      const res = await fetch(`${base}${p}`)
+      expect([p, res.status]).toEqual([p, 200])
+      expect(res.headers.get('content-type')).toMatch('text/html')
+      expect(await res.text()).toBe(shell)
+    }
+  })
+
+  it('falls through to the not found route for file-like, ignored and non-GET requests', async () => {
+    for (const p of ['/missing.js', '/img/logo.png', '/api/users', '/api', '/internal/secret']) {
+      const res = await fetch(`${base}${p}`)
+      expect([p, res.status]).toEqual([p, 404])
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(await res.text()).toBe('nope\n')
+    }
+    // the not found page is a static file, so it only has a GET handler and a POST gets a bare 404
+    const post = await fetch(`${base}/nothing/here`, { method: 'POST' })
+    expect(post.status).toBe(404)
+    expect(await post.text()).toBe('')
+  })
+
+  it('finds node_modules files without nodeModulesPath by walking up from routeDir', async () => {
+    const cookie = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'node_modules', 'cookie', 'dist', 'index.js'), 'utf-8')
+    const res = await fetch(`${base}/lib/ext/cookie/dist/index.js`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe(cookie)
+    const etag = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'node_modules', 'etag', 'index.js'), 'utf-8')
+    const aliased = await fetch(`${base}/lib/ext/etag.js`)
+    expect(aliased.status).toBe(200)
+    expect(await aliased.text()).toBe(etag)
+  })
 })

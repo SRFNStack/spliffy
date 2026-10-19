@@ -364,15 +364,36 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
   }
 }
 
+// true when the last path segment looks like a file name, /app.js or /logo.png but not /.well-known/x
+const hasExtension = urlPath => urlPath.lastIndexOf('.') > urlPath.lastIndexOf('/') + 1
+
+const ignoredByDefaultRoute = (urlPath, ignore) => {
+  for (const entry of ignore) {
+    if (typeof entry === 'string' ? urlPath.startsWith(entry) : entry.test(urlPath)) return true
+  }
+  return false
+}
+
 export const createNotFoundHandler = config => {
-  const handler = config.defaultRouteHandler || config.notFoundRouteHandler
-  const paramToIndex = handler?.paramToIndex || {}
+  const defaultRoute = config.defaultRouteHandler || null
+  const notFoundRoute = config.notFoundRouteHandler || null
+  const ignore = config.defaultRouteIgnore || []
+  // the default route is the SPA shell, it only answers requests a browser navigation would make
+  const pickHandler = sReq => {
+    if (defaultRoute && (sReq.method === 'GET' || sReq.method === 'HEAD') &&
+      !hasExtension(sReq.path) && !ignoredByDefaultRoute(sReq.path, ignore)) {
+      return defaultRoute
+    }
+    return notFoundRoute
+  }
   let resProto = null
   return (res, req) => {
     uwsCallback.active = true
     try {
       Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
-      const sReq = new SpliffyRequest(req, paramToIndex, res, config)
+      const sReq = new SpliffyRequest(req, {}, res, config)
+      const handler = pickHandler(sReq)
+      if (handler) sReq._paramToIndex = handler.paramToIndex || {}
       sReq.forceCache()
       res.ensureOnAborted()
       if (handler && typeof handler === 'object') {

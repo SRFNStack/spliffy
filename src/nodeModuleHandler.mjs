@@ -6,6 +6,18 @@ import { getContentTypeByExtension } from './content.mjs'
 
 const stripLeadingSlash = p => p.startsWith('/') ? p.substr(1) : p
 
+// every node_modules dir from routeDir up to the filesystem root, the directories node itself searches
+const ancestorNodeModules = routeDir => {
+  const dirs = []
+  let dir = path.resolve(routeDir)
+  while (true) {
+    dirs.push(path.join(dir, 'node_modules'))
+    const parent = path.dirname(dir)
+    if (parent === dir) return dirs
+    dir = parent
+  }
+}
+
 /**
  This helper will add all the configured node_module files to the given routes.
  The configured node moduleRoutes must be explicit files, no pattern matching is supported.
@@ -24,9 +36,25 @@ export function getNodeModuleRoutes (config) {
   const nodeModuleRoutes = config.nodeModuleRoutes
   const routes = []
   if (nodeModuleRoutes && typeof nodeModuleRoutes === 'object') {
-    const nodeModulesDir = nodeModuleRoutes.nodeModulesPath ? path.resolve(nodeModuleRoutes.nodeModulesPath) : path.resolve(config.routeDir, '..', 'node_modules')
-    if (!fs.existsSync(nodeModulesDir)) {
-      throw new Error(`Unable to find node_modules dir at ${nodeModulesDir}`)
+    let searchDirs
+    if (nodeModuleRoutes.nodeModulesPath) {
+      searchDirs = [path.resolve(nodeModuleRoutes.nodeModulesPath)]
+      if (!fs.existsSync(searchDirs[0])) {
+        throw new Error(`Unable to find node_modules dir at ${searchDirs[0]}`)
+      }
+    } else {
+      searchDirs = ancestorNodeModules(config.routeDir).filter(dir => fs.existsSync(dir))
+      if (searchDirs.length === 0) {
+        throw new Error(`Unable to find a node_modules dir in ${config.routeDir} or any parent directory`)
+      }
+    }
+    // the first node_modules dir holding the file wins, nearest to routeDir first
+    const findFile = modulePath => {
+      for (const dir of searchDirs) {
+        const filePath = path.join(dir, modulePath)
+        if (fs.existsSync(filePath)) return filePath
+      }
+      return null
     }
     const prefix = stripLeadingSlash(nodeModuleRoutes.routePrefix || 'lib/ext')
     if (!Array.isArray(nodeModuleRoutes.files)) {
@@ -35,16 +63,16 @@ export function getNodeModuleRoutes (config) {
     for (const file of nodeModuleRoutes.files) {
       let filePath, urlPath
       if (file && typeof file === 'object') {
-        filePath = path.join(nodeModulesDir, file.modulePath)
+        filePath = findFile(file.modulePath)
         urlPath = `/${prefix}/${stripLeadingSlash(file.urlPath || file.modulePath)}`
       } else if (file && typeof file === 'string') {
-        filePath = path.join(nodeModulesDir, file)
+        filePath = findFile(file)
         urlPath = `/${prefix}/${stripLeadingSlash(file)}`
       } else {
         throw new Error('Invalid node_module file: ' + file)
       }
 
-      if (fs.existsSync(filePath)) {
+      if (filePath) {
         if (nodeModuleRoutes.method === 'copy') {
           const dest = path.join(config.routeDir, urlPath)
           fs.mkdirSync(path.dirname(dest), { recursive: true })
@@ -67,7 +95,7 @@ export function getNodeModuleRoutes (config) {
           })
         }
       } else {
-        console.warn(`The specified node_modules file: ${file} does not exist and will not be served.`)
+        console.warn(`The specified node_modules file: ${JSON.stringify(file)} was not found in ${searchDirs.join(', ')} and will not be served.`)
       }
     }
   }

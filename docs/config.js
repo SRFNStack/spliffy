@@ -64,9 +64,11 @@ export default div(
     li(strong('routePrefix'),
       ': A prefix that will be included at the beginning of the path for every request. For example, a request to /foo becomes /routePrefix/foo'),
     li(strong('defaultRoute'),
-      ': The default route to return when the path is not found. Responds with a 200 status. Takes precedence over notFoundRoute. Used for single page apps.'),
+      ': The route to serve with a 200 status when a GET request matches no route and the last path segment has no file extension, the single page app fallback. Requests for files like /missing.js, paths matching defaultRouteIgnore, and other methods fall through to notFoundRoute.'),
+    li(strong('defaultRouteIgnore'),
+      ': Paths the defaultRoute must not answer. An array of path prefixes (strings) and regular expressions, for example ', code("['/api', /^\\/internal\\//]"), '. Default [].'),
     li(strong('notFoundRoute'),
-      ': The route to use for the not found page. Not used if defaultRoute is set. Responds with a 404 status code.'),
+      ': The route to use for the not found page. Responds with a 404 status code.'),
     li(strong('acceptsDefault'),
       ': The default mime type to use when accepting a request body. e({m},/) will convert objects from json by default'),
     li(strong('defaultContentType'),
@@ -110,7 +112,7 @@ export default div(
     li(strong('autoOptions'), ': automatically generate options routes for every end point if not provided, default false.'),
     li(strong('nodeModuleRoutes'), ': Map files from node_modules directly to routes.',
       ul(
-        li(strong('nodeModulesPath'), ': The absolute path to the node_modules directory'),
+        li(strong('nodeModulesPath'), ': The absolute path to the node_modules directory. When omitted, every node_modules directory from routeDir up to the filesystem root is searched, the way node resolves packages.'),
         li(strong('files'), ': An array of files to expose. Can be a string (relative path within node_modules) or an object with ', code('modulePath'), ' and ', code('urlPath'), ' properties.')
       )
     )

@@ -85,6 +85,16 @@ export async function initConfig (userConfig) {
   } else if (!Array.isArray(config.ignoreFilesMatching)) {
     config.ignoreFilesMatching = [config.ignoreFilesMatching]
   }
+  if (!('defaultRouteIgnore' in config)) {
+    config.defaultRouteIgnore = []
+  } else if (!Array.isArray(config.defaultRouteIgnore)) {
+    config.defaultRouteIgnore = [config.defaultRouteIgnore]
+  }
+  for (const entry of config.defaultRouteIgnore) {
+    if (typeof entry !== 'string' && !(entry instanceof RegExp)) {
+      throw new Error('defaultRouteIgnore entries must be path prefixes or regular expressions, got: ' + entry)
+    }
+  }
   if (!('allowTestFileRoutes' in config)) {
     config.allowTestFileRoutes = false
   }

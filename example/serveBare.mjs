@@ -10,5 +10,12 @@ spliffy({
   declarativeStaticMaxSize: 1024 * 1024,
   staticContentTypes: {
     '.txt': 'text/plain'
+  },
+  defaultRoute: '/app.html',
+  defaultRouteIgnore: ['/api', /^\/internal\//],
+  notFoundRoute: '/404.txt',
+  // no nodeModulesPath, the project's node_modules is three directories up from routeDir
+  nodeModuleRoutes: {
+    files: ['cookie/dist/index.js', { modulePath: 'etag/index.js', urlPath: '/etag.js' }]
   }
 })
