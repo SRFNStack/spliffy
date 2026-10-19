@@ -146,8 +146,10 @@ GET: ({ url, headers, bodyPromise, req, res }) => { ... }
 - `req.cookies`: the parsed `cookie` header as an object, parsed lazily on first access. (A
   `cookies` shortcut exists on the context for routes without middleware only, so prefer
   `req.cookies`.)
-- `bodyPromise`: resolves to the parsed request body (see Request bodies). Always `await` it. There
-  is no `body` property on the context.
+- `body`: the parsed request body (see Request bodies), already read by the time the handler runs,
+  so a `POST` handler can be synchronous. `null` for `GET` and `HEAD`. With `streamRequestBody` it
+  is the `Readable`.
+- `bodyPromise`: the same body as a promise, for handlers written around `await bodyPromise`.
 - `req`: the spliffy request (see below). `req.user` is the convention middleware uses to attach an
   authenticated principal.
 - `res`: the spliffy response (see below). Reading `res` from the context is what switches the
@@ -172,8 +174,8 @@ The return value (or the resolved value of a returned promise) decides the respo
 | Returned | Status | Body | Content-Type |
 | --- | --- | --- | --- |
 | `undefined`, `null`, `''`, `false` | 200 | empty | none |
-| string | 200 | the string | `text/plain` unless `res` already has one |
-| `Buffer` | 200 | the bytes | `application/octet-stream` unless set |
+| string | 200 | the string | none unless set, so put one in a descriptor |
+| `Buffer` | 200 | the bytes | none unless set |
 | any other object or array | 200 | `JSON.stringify` | `application/json` |
 | `stream.Readable` | 200 | piped | whatever you set |
 | descriptor `{ statusCode, statusMessage, headers, body }` | as given | `body` by the rules above | as given |
@@ -252,16 +254,18 @@ errorTransformer: (err, refId) => {
 
 ## Request bodies
 
-Bodies are buffered in memory by default. `GET` and `HEAD` requests never have a body promise to
-wait for. For other methods `await bodyPromise` gives:
+Bodies are buffered in memory by default and parsed before the handler runs, so `body` on the
+context is ready to use and `bodyPromise` resolves to the same value. `GET` and `HEAD` requests
+have no body (`null`). For other methods the body is:
 
 | Request `content-type` | Resolves to |
 | --- | --- |
 | `application/json` | `JSON.parse` of the body (throws, so a 500, on invalid JSON) |
 | `text/plain` | string |
 | `application/x-www-form-urlencoded` | object, repeated keys become arrays, values decoded |
+| `application/octet-stream` | `Buffer`, the bytes as sent |
 | anything else, or no header | `Buffer`, unless the bytes look like JSON, then parsed JSON |
-| no body | `Buffer` of length 0 (`null` for `GET` and `HEAD`) |
+| no body | `Buffer` of length 0 whatever the content type (`null` for `GET` and `HEAD`) |
 
 Add or override parsers with `contentHandlers` in the config (keys must be lower case):
 
@@ -703,7 +707,7 @@ Seen across several production spliffy apps:
 
 ## Common mistakes
 
-- Using `body` or `query` or `pathParameters` on the context. Use `await bodyPromise`,
+- Using `query` or `pathParameters` on the context. Use `body`,
   `url.query`, `url.param('name')`.
 - Lower case method keys (`get:`) or an `ALL:` handler. Startup fails with a message naming the file.
 - Expecting `/foo/` to work. A file route never answers with a trailing slash. A folder index does,

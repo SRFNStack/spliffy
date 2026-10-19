@@ -20,8 +20,14 @@ class BodilessContext extends HandlerContext {
     this._acceptsDefault = acceptsDefault
   }
 
+  get body () {
+    return this._body || (this._body = deserializeBody(EMPTY_BODY, this.req.headers['content-type'], this._acceptsDefault))
+  }
+
+  set body (b) { this._body = b }
+
   get bodyPromise () {
-    return this._bodyPromise || (this._bodyPromise = Promise.resolve(deserializeBody(EMPTY_BODY, this.req.headers['content-type'], this._acceptsDefault)))
+    return this._bodyPromise || (this._bodyPromise = Promise.resolve(this.body))
   }
 
   set bodyPromise (p) { this._bodyPromise = p }
@@ -35,7 +41,7 @@ const executeHandler = async (url, res, req, bodyPromise, handler, middleware, e
         ? bodyContent
         : deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
 
-      const handled = await handler(new HandlerContext(req, res, Promise.resolve(deserializedBody)))
+      const handled = await handler(new HandlerContext(req, res, Promise.resolve(deserializedBody), null, deserializedBody))
       finalizeResponse(req, res, handled, handler.statusCodeOverride)
     }
   } catch (e) {
@@ -324,7 +330,7 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
       if (direct && noBody) {
         // no body to wait for: the request is only read while the uws request is still valid
         const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
-        invoke(res, new HandlerContext(sReq, res, NULL_PROMISE, decorate))
+        invoke(res, new HandlerContext(sReq, res, NULL_PROMISE, decorate, null))
       } else if (direct) {
         // the uws request is gone by the time the body arrives, so read it all now
         const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
@@ -346,7 +352,7 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
           uwsCallback.active = true
           try {
             const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], acceptsDefault)
-            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body), decorate))
+            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body), decorate, body))
           } catch (e) {
             endError(res, e, uuid(), errorTransformer)
           } finally {

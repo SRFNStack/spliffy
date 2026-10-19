@@ -152,11 +152,13 @@ export function decorateRequest (uwsReq, paramToIndex, res, config) {
  * handler that never looks at them never pays for parsing them.
  */
 export class HandlerContext {
-  constructor (req, res, bodyPromise, decorate) {
+  constructor (req, res, bodyPromise, decorate, body) {
     this.req = req
     this._res = res
     this._decorate = decorate || null
     this.bodyPromise = bodyPromise
+    // the parsed body, already read by the time the handler runs. A streamed body is the Readable
+    this.body = body === undefined ? null : body
   }
 
   get res () { return this._decorate === null ? this._res : this._decorate(this._res) }
