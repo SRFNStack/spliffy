@@ -3,6 +3,7 @@ import { deserializeBody, serializeBody } from './content.mjs'
 import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
 import { responseProto, SpliffyRequest, HandlerContext } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
+import { defaultStatusMessages } from './httpStatusCodes.mjs'
 import stream from 'stream'
 const { Readable } = stream
 
@@ -188,14 +189,43 @@ const fail = (res, e) => {
   }
 }
 
-// parked for the synchronous cork callback below, same trick as the response prototype uses
+// parked for the synchronous cork callbacks below, same trick as the response prototype uses
 let corkedRes = null
 let corkedEnd = null
 let corkedBody = null
 let corkedContentType = null
+let corkedStatus = null
+let corkedHeaders = null
 const corkedTypedEnd = () => {
   corkedRes.writeHeader('content-type', corkedContentType)
   corkedEnd.call(corkedRes, corkedBody)
+}
+const corkedDescriptorEnd = () => {
+  if (corkedStatus) corkedRes.writeStatus(corkedStatus)
+  for (const name in corkedHeaders) {
+    const value = corkedHeaders[name]
+    if (Array.isArray(value)) {
+      for (let i = 0, l = value.length; i < l; i++) corkedRes.writeHeader(name, String(value[i]))
+    } else {
+      corkedRes.writeHeader(name, String(value))
+    }
+  }
+  corkedEnd.call(corkedRes, corkedBody)
+}
+
+/**
+ * Send a { statusCode, statusMessage, headers, body } descriptor whose body is text with the uws
+ * response as is: status, headers and body in one corked write.
+ */
+const sendDescriptor = (res, uwsEnd, handled) => {
+  const statusCode = handled.statusCode
+  corkedRes = res
+  corkedEnd = uwsEnd
+  corkedStatus = statusCode && statusCode !== 200 ? statusCode + ' ' + (handled.statusMessage || defaultStatusMessages[statusCode] || '') : null
+  corkedHeaders = handled.headers
+  corkedBody = handled.body || ''
+  res.cork(corkedDescriptorEnd)
+  corkedRes = corkedEnd = corkedStatus = corkedHeaders = corkedBody = null
 }
 
 /**
@@ -256,7 +286,12 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
       } else if (!handled) {
         uwsEnd.call(res, '')
       } else if (handled.body || handled.statusMessage || handled.statusCode || handled.headers) {
-        finalizeResponse(null, decorate(res), handled, null)
+        const body = handled.body
+        if ((typeof body === 'string' || body instanceof Buffer || !body) && !(body instanceof Readable)) {
+          sendDescriptor(res, uwsEnd, handled)
+        } else {
+          finalizeResponse(null, decorate(res), handled, null)
+        }
       } else {
         const serialized = serializeBody(handled, undefined, acceptsDefault)
         if (serialized?.contentType) {

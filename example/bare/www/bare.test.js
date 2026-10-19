@@ -63,6 +63,16 @@ describe('routes with no middleware', () => {
     expect(post.headers.get('x-bare')).toBe('also')
     expect(post.headers.get('content-type')).toBe('application/json')
     expect(await post.json()).toEqual({ ok: true })
+    const put = await fetch(`${base}/headers`, { method: 'PUT' })
+    expect(put.status).toBe(203)
+    expect(put.statusText).toBe('Non-Authoritative Information')
+    expect(put.headers.get('x-bare')).toBe('desc')
+    expect(put.headers.get('x-multi')).toBe('1, 2')
+    expect(await put.text()).toBe('text body')
+    const del = await fetch(`${base}/headers`, { method: 'DELETE' })
+    expect(del.status).toBe(200)
+    expect(del.headers.get('x-bare')).toBe('nobody')
+    expect(await del.text()).toBe('')
   })
 
   it('supports res.send and res.redirect', async () => {
