@@ -50,7 +50,8 @@ export async function initConfig (userConfig) {
     config.declarativeStatic = true
   }
   if (!('declarativeStaticMaxSize' in config)) {
-    config.declarativeStaticMaxSize = 1024 * 1024
+    // one instruction's worth, so the response keeps a content-length; bigger files are chunked
+    config.declarativeStaticMaxSize = 65535
   }
 
   config.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault

@@ -7,6 +7,7 @@ spliffy({
   port: 11421,
   logAccess: false,
   cacheStatic: true,
+  declarativeStaticMaxSize: 1024 * 1024,
   staticContentTypes: {
     '.txt': 'text/plain'
   }

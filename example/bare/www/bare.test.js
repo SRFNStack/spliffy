@@ -114,4 +114,14 @@ describe('routes with no middleware', () => {
     expect(res.status).toBe(200)
     expect(await res.text()).toBe(expected)
   })
+
+  it('streams responses and request bodies', async () => {
+    expect(await (await fetch(`${base}/streams`)).text()).toBe('hello from a compiled static file\n')
+    expect(await (await fetch(`${base}/streams`, { method: 'POST' })).text()).toBe('abc')
+    const put = await fetch(`${base}/streams`, { method: 'PUT' })
+    expect(put.headers.get('content-type')).toBe('text/plain')
+    expect(await put.text()).toBe('hello from a compiled static file\n')
+    expect(await (await fetch(`${base}/streams`, { method: 'PATCH', body: 'streamed in' })).json()).toEqual({ got: 'streamed in' })
+    expect(await (await fetch(`${base}/streams`, { method: 'DELETE' })).text()).toBe('late')
+  })
 })

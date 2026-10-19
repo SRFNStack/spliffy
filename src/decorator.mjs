@@ -172,6 +172,13 @@ export class HandlerContext {
  * write per method. Per request state (headers, ended, statusCode...) defaults live here too and
  * are only written to the instance when they change.
  */
+/**
+ * uws corks the socket for as long as one of its callbacks runs (the route handler, onData), so a
+ * write made there goes out with everything else written in the callback. A write made later, after
+ * an await or from a stream event, has to cork itself. The handlers flip this while a callback runs.
+ */
+export const uwsCallback = { active: false }
+
 // uws runs the cork callback synchronously and without arguments, so what it needs is parked here
 // for the duration of the call instead of allocating a closure per response
 let corked = null
@@ -284,9 +291,9 @@ const buildResponseProto = (uwsProto, config, finalizeResponse, endError) => {
       if (this.ended) return
       this.ended = true
       this.writableEnded = true
-      if (this.headersSent || (!this._h && (!this.statusCode || this.statusCode === 200))) {
-        // nothing to write ahead of the body, so one uws end call sends status, headers and body
-        // in a single write with no need to cork
+      if (uwsCallback.active && (this.headersSent || (!this._h && (!this.statusCode || this.statusCode === 200)))) {
+        // nothing to write ahead of the body and uws has the socket corked already, so one uws end
+        // call sends status, headers and body in a single write
         this.headersSent = true
         this._uwsEnd(body || '')
       } else {

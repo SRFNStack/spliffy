@@ -1,7 +1,7 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
 import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
-import { responseProto, SpliffyRequest, HandlerContext } from './decorator.mjs'
+import { responseProto, SpliffyRequest, HandlerContext, uwsCallback } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
 import { defaultStatusMessages } from './httpStatusCodes.mjs'
 import stream from 'stream'
@@ -35,7 +35,7 @@ const executeHandler = async (url, res, req, bodyPromise, handler, middleware, e
         ? bodyContent
         : deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
 
-      const handled = await handler({ url, bodyPromise: Promise.resolve(deserializedBody), headers: req.headers, req, res })
+      const handled = await handler(new HandlerContext(req, res, Promise.resolve(deserializedBody)))
       finalizeResponse(req, res, handled, handler.statusCodeOverride)
     }
   } catch (e) {
@@ -91,6 +91,8 @@ const finalizeResponse = (req, res, handled, statusCodeOverride) => {
 }
 
 const pipeResponse = (res, readStream, errorTransformer) => {
+  // the response outlives the uws callback, so uws must be told what to do if the client goes away
+  res.ensureOnAborted()
   readStream.on('data', chunk => res.write(chunk))
     .on('end', () => res.end())
     .on('error', e => {
@@ -285,6 +287,8 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
         uwsEnd.call(res, handled)
       } else if (!handled) {
         uwsEnd.call(res, '')
+      } else if (handled instanceof Readable) {
+        finalizeResponse(null, decorate(res), handled, null)
       } else if (handled.body || handled.statusMessage || handled.statusCode || handled.headers) {
         const body = handled.body
         if ((typeof body === 'string' || body instanceof Buffer || !body) && !(body instanceof Readable)) {
@@ -311,6 +315,7 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
   }
 
   return function (res, req) {
+    uwsCallback.active = true
     try {
       if (direct && noBody) {
         // no body to wait for: the request is only read while the uws request is still valid
@@ -334,11 +339,14 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
             buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
           }
           if (!isLast || res.ended) return
+          uwsCallback.active = true
           try {
             const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], acceptsDefault)
             invoke(res, new HandlerContext(sReq, res, Promise.resolve(body), decorate))
           } catch (e) {
             endError(res, e, uuid(), errorTransformer)
+          } finally {
+            uwsCallback.active = false
           }
         })
       } else {
@@ -350,6 +358,8 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
       }
     } catch (e) {
       fail(res, e)
+    } finally {
+      uwsCallback.active = false
     }
   }
 }
@@ -359,6 +369,7 @@ export const createNotFoundHandler = config => {
   const paramToIndex = handler?.paramToIndex || {}
   let resProto = null
   return (res, req) => {
+    uwsCallback.active = true
     try {
       Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
       const sReq = new SpliffyRequest(req, paramToIndex, res, config)
@@ -389,6 +400,8 @@ export const createNotFoundHandler = config => {
       }
     } catch (e) {
       log.error('Failed handling request', e)
+    } finally {
+      uwsCallback.active = false
     }
   }
 }
