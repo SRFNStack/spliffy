@@ -40,4 +40,6 @@ Go to `localhost:10420/spliffy`
 
 # [Documentation](https://srfnstack.github.io/spliffy/)
 
+The complete reference as plain text, for people and language models: [llms.txt](https://srfnstack.github.io/spliffy/llms.txt)
+
 #### [Examples](https://github.com/narcolepticsnowman/spliffy/tree/master/example)

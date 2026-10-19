@@ -1,0 +1,681 @@
+# Spliffy
+
+> Spliffy is a Node.js web framework on top of µWebSockets.js. Routes are files: a directory of
+> `.rt.mjs` handler files and static assets becomes the URL space of the server, like Apache or PHP.
+> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.5.0.
+
+The documentation site (https://srfnstack.github.io/spliffy/) is a client rendered single page app,
+so this file is the complete reference, not a table of contents. Everything below is checked
+against the 1.5.0 source. The package has no TypeScript types.
+
+## Links
+
+- [Source on GitHub](https://github.com/SRFNStack/spliffy): `src/` is small (about 1500 lines) and readable
+- [Example app](https://github.com/SRFNStack/spliffy/tree/master/example): every feature below has a route file and a jest test here
+- [npm](https://www.npmjs.com/package/@srfnstack/spliffy)
+- [µWebSockets.js](https://github.com/uNetworking/uWebSockets.js): the raw `req`, `res` and `ws` objects come from here
+- [Docs site](https://srfnstack.github.io/spliffy/)
+
+## Quick start
+
+```
+app/
+  serve.mjs
+  www/
+    index.html          -> GET /            (static)
+    hello.rt.mjs        -> /hello           (handler)
+    api/
+      users/
+        index.rt.mjs    -> /api/users
+        $id.rt.mjs      -> /api/users/:id
+```
+
+```js
+// serve.mjs
+import spliffy, { moduleDirname } from '@srfnstack/spliffy'
+
+spliffy({
+  routeDir: moduleDirname(import.meta.url) + '/www',   // required, absolute path
+  port: 10420,                                         // default
+  serveRoutesWithSlash: true                           // folder indexes answer /api/users/ as well as /api/users
+})
+```
+
+```js
+// www/api/users/$id.rt.mjs
+import { NotFoundError, BadRequestError } from '@srfnstack/spliffy'
+
+export default {
+  GET: async ({ url }) => {
+    const user = await db.findUser(url.param('id'))
+    if (!user) throw new NotFoundError({ error: 'no such user' })
+    return user                                        // object -> application/json, 200
+  },
+  PUT: async ({ url, bodyPromise }) => {
+    const body = await bodyPromise                     // parsed by content-type
+    if (!body.name) throw new BadRequestError({ error: 'name is required' })
+    return db.updateUser(url.param('id'), body)
+  },
+  DELETE: async ({ url }) => {
+    await db.deleteUser(url.param('id'))               // undefined -> 200, empty body
+  }
+}
+```
+
+Run `node serve.mjs`. `spliffy()` returns a promise of the µWebSockets.js app. If any route file
+fails to load, the error is logged and the process exits with code 420. Only one `spliffy()` call
+per process is honoured, routes are loaded once.
+
+## Route files and URL mapping
+
+Everything is relative to `routeDir`. The scan is recursive and happens once at startup. There is
+no hot reload, restart the process after adding files.
+
+| File | URL | Rule |
+| --- | --- | --- |
+| `www/foo.rt.mjs` | `/foo` | the `.rt.mjs` suffix marks a handler module |
+| `www/foo/index.rt.mjs` | `/foo` and `/foo/` with `serveRoutesWithSlash` | `index` is the folder itself |
+| `www/index.rt.mjs` | `/` | root handler |
+| `www/$id.rt.mjs` | `/:id` | a leading `$` makes a path parameter, read with `url.param('id')` |
+| `www/users/$userId/posts/$postId.rt.mjs` | `/users/:userId/posts/:postId` | parameters nest through folders |
+| `www/files+.rt.mjs` | `/files` and `/files/anything/deeper` | a trailing `+` makes a catch-all |
+| `www/logo.png` | `/logo.png` | anything that is not a handler is a static file |
+| `www/about.html` | `/about.html` and `/about` | `.html` and `.htm` always resolve without extension |
+| `www/docs/index.html` | `/docs`, `/docs/`, `/docs/index`, `/docs/index.html` | index files are the folder default |
+
+Rules and gotchas:
+
+- Accepted handler extensions are `.rt.mjs`, `.rt.js` and `.rt.cjs`. Use `.rt.mjs` (or `.rt.js`
+  with `"type": "module"` in package.json). A CommonJS file uses `module.exports = { GET ... }`.
+- Only one `$variable` file or folder per directory. Two would be ambiguous and the server refuses to start.
+- Files ending in `.test.js` or `.test.mjs` are skipped, so tests can sit next to routes. Set
+  `allowTestFileRoutes: true` to change that. `ignoreFilesMatching: ['^draft', '\\.bak$']` skips
+  more files by regex on the file name.
+- URL matching is done by µWebSockets.js, so a static route wins over a parameter route and a
+  parameter route wins over a catch-all.
+- Trailing slashes are literal. `foo.rt.mjs` answers `/foo` only, never `/foo/`. A folder index
+  (`foo/index.rt.mjs` or `foo/index.html`) answers `/foo`, and also `/foo/` when
+  `serveRoutesWithSlash: true` is set. Without it `/foo/` is not found. Every production app sets it.
+- A request method with no handler (for example `POST` to a static file, or `HEAD` to a route with
+  only `GET`) falls through to the not found handler. Define `HEAD` yourself if clients send it.
+  `autoOptions: true` adds an `OPTIONS` handler to every route that answers 204 with an `Allow` header.
+- Query strings never take part in routing.
+
+## Handler module shape
+
+```js
+export default {
+  // reserved, optional
+  middleware: [ (req, res, next) => next() ],        // or { ALL: [...], POST: [...] }
+  streamRequestBody: false,                          // applies to every method in the file
+
+  // one key per HTTP method, upper case only
+  GET: ctx => ({ ok: true }),
+  POST: async ctx => { ... },
+  PUT: { streamRequestBody: true, handler: async ctx => { ... } },   // per method options
+  DELETE: ctx => { ... },
+  PATCH: ctx => { ... },
+  OPTIONS: ctx => { ... },
+  HEAD: ctx => { ... },
+
+  WEBSOCKET: { open (ws) {}, message (ws, msg, isBinary) {}, close (ws) {} }   // see WebSockets
+}
+```
+
+Allowed keys are `GET POST PUT PATCH DELETE OPTIONS HEAD CONNECT TRACE WEBSOCKET` plus
+`middleware` and `streamRequestBody`. Anything else, or a lower case method, fails at startup.
+There is no `ALL` handler, `ALL` only exists in middleware objects.
+
+## The handler argument
+
+Each handler receives one context object. Destructure what you need:
+
+```js
+GET: ({ url, headers, bodyPromise, req, res }) => { ... }
+```
+
+- `url.path`: the request path, no query string, not decoded. For catch-all routes this is the full
+  path the client sent, so `url.path.split('/')` is how to read what came after the `+` segment.
+- `url.query`: object of query parameters. A key that repeats becomes an array. Values are the raw
+  wire bytes unless `decodeQueryParameters: true` is set in the config, which runs
+  `decodeURIComponent` on keys and values and turns `+` into a space.
+- `url.param(name)`: a path parameter by the `$name` of the file or folder. Never decoded. Call
+  `decodeURIComponent` yourself if the value may contain escapes. `url.param` is a closure, so
+  `({ url: { param } }) => param('id')` works.
+- `headers`: object of lower case request header names to string values.
+- `req.cookies`: the parsed `cookie` header as an object, parsed lazily on first access. (A
+  `cookies` shortcut exists on the context for routes without middleware only, so prefer
+  `req.cookies`.)
+- `bodyPromise`: resolves to the parsed request body (see Request bodies). Always `await` it. There
+  is no `body` property on the context.
+- `req`: the spliffy request (see below). `req.user` is the convention middleware uses to attach an
+  authenticated principal.
+- `res`: the spliffy response (see below). Reading `res` from the context is what switches the
+  response into the decorated mode, so a handler that just returns a value never pays for it.
+
+`req` is a `SpliffyRequest`, not a Node `IncomingMessage`:
+
+- `req.path`, `req.url` (path plus query string), `req.method` (upper case), `req.headers`,
+  `req.query`, `req.cookies`, `req.get('Header-Name')`
+- `req.remoteAddress`, `req.proxiedRemoteAddress` (from the PROXY protocol header, if any)
+- `req.spliffyUrl` is the same object as `url` in the context
+- The underlying µWebSockets.js request is only valid while the handler is synchronous. Spliffy
+  copies headers, path, query and parameters before any `await`, so `req` is safe to use after
+  awaiting, but do not keep raw uws request references.
+- Set `extendIncomingMessage: true` in the config to put `http.IncomingMessage.prototype` behind
+  `req` for middleware such as passport that patches that prototype.
+
+## Returning a response
+
+The return value (or the resolved value of a returned promise) decides the response:
+
+| Returned | Status | Body | Content-Type |
+| --- | --- | --- | --- |
+| `undefined`, `null`, `''`, `false` | 200 | empty | none |
+| string | 200 | the string | `text/plain` unless `res` already has one |
+| `Buffer` | 200 | the bytes | `application/octet-stream` unless set |
+| any other object or array | 200 | `JSON.stringify` | `application/json` |
+| `stream.Readable` | 200 | piped | whatever you set |
+| descriptor `{ statusCode, statusMessage, headers, body }` | as given | `body` by the rules above | as given |
+
+A descriptor is any object that has at least one of `statusCode`, `statusMessage`, `headers` or
+`body`. This is the way to set status and headers from the return value:
+
+```js
+GET: () => ({
+  statusCode: 201,
+  headers: { 'content-type': 'text/html', 'cache-control': 'no-store' },
+  body: '<h1>made</h1>'
+})
+```
+
+Gotchas:
+
+- Because of the descriptor rule, a data object that happens to have a `body`, `headers` or
+  `statusCode` key is treated as a descriptor, not serialized as JSON. Wrap it: `{ body: data }`.
+- There is no `contentType` key. The content type goes in `headers`.
+- Header names are lower cased when stored. `set-cookie` may be an array.
+- Alternatively mutate `res` and return nothing or the body: `res.statusCode = 202`,
+  `res.setHeader('x-thing', '1')`, `res.setCookie(...)`, then `return data`.
+- A `HEAD` route behaves like any other; spliffy does not strip the body for you.
+
+Helpers exported from the package:
+
+```js
+import { redirect } from '@srfnstack/spliffy'
+export default { GET: redirect('/new-place') }            // 301
+export default { GET: redirect('/new-place', false) }     // 302
+```
+
+## Errors
+
+Throw to fail a request. Any thrown value ends the response.
+
+```js
+import { BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, HttpError } from '@srfnstack/spliffy'
+
+throw new NotFoundError({ error: 'no such thing' })      // 404, body JSON
+throw new ForbiddenError('nope')                         // 403, body text
+throw new HttpError(418, "I'm a teapot", { short: true })  // any status
+```
+
+- Every 4xx and 5xx status has a class named after its reason phrase: `BadRequestError` 400,
+  `UnauthorizedError` 401, `PaymentRequiredError` 402, `ForbiddenError` 403, `NotFoundError` 404,
+  `MethodNotAllowedError` 405, `NotAcceptableError` 406, `ConflictError` 409, `GoneError` 410,
+  `PayloadTooLargeError` 413, `UnsupportedMediaTypeError` 415, `EnhanceYourCalmError` 420,
+  `UnprocessableEntityError` 422, `TooManyRequestsError` 429, `InternalServerError` 500,
+  `NotImplementedError` 501, `BadGatewayError` 502, `ServiceUnavailableError` 503,
+  `GatewayTimeoutError` 504, and the rest. The constructor takes the body only.
+- An error with a `statusCode` property is sent with that status. The `body` property is the
+  response body; objects are JSON stringified. Any other thrown error is a 500 with an empty body
+  and the error is logged with its stack.
+- Every error response carries an `x-ref-id` header with a UUID. The same id is passed to
+  `errorTransformer` and is meant to be logged so a user facing id can be matched to a stack trace.
+- `errorTransformer(err, refId)` in the config runs on every error before it is sent and returns
+  the error to send. The pattern used in production apps:
+
+```js
+errorTransformer: (err, refId) => {
+  if (err.validationErrors) {
+    err.statusCode = 400
+    err.body = { validationErrors: err.validationErrors }
+  } else if (!err.statusCode || err.statusCode === 500) {
+    log.error(`500 ${refId}`, err)
+    err.statusMessage = `Something went wrong, reference ${refId}`
+    err.body = { refId }
+  }
+  return err
+}
+```
+
+- Four argument middleware `(err, req, res, next)` runs before the error is sent, see Middleware.
+
+## Request bodies
+
+Bodies are buffered in memory by default. `GET` and `HEAD` requests never have a body promise to
+wait for. For other methods `await bodyPromise` gives:
+
+| Request `content-type` | Resolves to |
+| --- | --- |
+| `application/json` | `JSON.parse` of the body (throws, so a 500, on invalid JSON) |
+| `text/plain` | string |
+| `application/x-www-form-urlencoded` | object, repeated keys become arrays, values decoded |
+| anything else, or no header | `Buffer`, unless the bytes look like JSON, then parsed JSON |
+| no body | `Buffer` of length 0 (`null` for `GET` and `HEAD`) |
+
+Add or override parsers with `contentHandlers` in the config (keys must be lower case):
+
+```js
+contentHandlers: {
+  'application/xml': { deserialize: buf => parseXml(buf.toString()), serialize: obj => toXml(obj) },
+  'text/csv': { deserialize: buf => buf.toString(), serialize: s => s }
+}
+```
+
+The same table is used to serialize responses when `res` has a `content-type` the table knows.
+
+`multipart/form-data` is not parsed. Stream it instead:
+
+```js
+import Busboy from 'busboy'
+export default {
+  streamRequestBody: true,
+  POST: async ({ headers, bodyPromise }) => {
+    const stream = await bodyPromise          // a stream.Readable, nothing buffered
+    const bb = Busboy({ headers })
+    ...
+    stream.pipe(bb)
+  }
+}
+```
+
+With `streamRequestBody: true` (on the module, or on one method with the `{ streamRequestBody,
+handler }` form) `bodyPromise` resolves to a `stream.Readable` of the raw bytes. Use this for
+uploads of any size; the buffered path concatenates chunks and is meant for small JSON bodies.
+There is no built in body size limit, enforce one in middleware or your handler.
+
+## The response object
+
+`res` is the µWebSockets.js response with an Express flavoured layer on top. Use the layer, not
+the raw `writeStatus`, `writeHeader` and `cork` calls, unless you know uws.
+
+- `res.statusCode`, `res.statusMessage`
+- `res.headers` (object), `res.setHeader(name, value)`, `res.getHeader(name)`,
+  `res.removeHeader(name)`, `res.assignHeaders({...})`, `res.writeHead(status, headers)`
+- `res.status(code)` (chainable), `res.redirect(location)` or `res.redirect(code, location)`
+- `res.send(body)`, `res.json(body)`: finish the response using the return value rules. After
+  calling these, return nothing from the handler.
+- `res.setCookie(name, value, options)` and the alias `res.cookie(...)`: options go straight to
+  `cookie.serialize` (`httpOnly`, `secure`, `sameSite`, `maxAge`, `path`, `domain`, `expires`).
+- `res.write(chunk)`, `res.end(body)`, `res.getWritable()`: streaming, see below.
+- `res.headersSent`, `res.writableEnded`, `res.ended`, `res.streaming`
+
+Headers are sent with the first `write` or `end`, so set status and headers first.
+
+## Streaming responses
+
+Return a `Readable` as the body, or pipe into `res.getWritable()`:
+
+```js
+import fs from 'node:fs'
+import { pipeline } from 'node:stream/promises'
+
+export default {
+  GET: ({ res }) => {
+    res.setHeader('content-type', 'image/jpeg')
+    return fs.createReadStream('/path/to/pic.jpg')          // simplest
+  }
+}
+
+export default {
+  GET: async ({ res }) => {
+    res.setHeader('content-type', 'text/csv')
+    await pipeline(rowStream(), res.getWritable())          // backpressure aware
+  }
+}
+```
+
+Writing by hand needs `res.streaming = true` before the handler returns, and you must call
+`res.end()` yourself or the connection stays open forever:
+
+```js
+GET: async ({ res }) => {
+  res.setHeader('content-type', 'text/event-stream')
+  res.streaming = true
+  const timer = setInterval(() => res.write(`data: ${Date.now()}\n\n`), 1000)
+  res.onAborted(() => clearInterval(timer))                 // client went away
+}
+```
+
+For long lived connections (server sent events, long polling) prefer a WebSocket route; uws
+tracks aborted clients for you there.
+
+## Middleware
+
+Express style `(req, res, next)` functions. `req` and `res` are the spliffy objects described
+above, not Node's, so middleware that only reads headers, sets headers and cookies, or attaches
+properties to `req` works. `helmet`, `passport` and `csurf` are used in production with spliffy.
+
+Three places to attach it:
+
+```js
+// 1. config, applies to every route including static files
+spliffy({ routeDir, middleware: [helmet(), logRequests] })
+
+// 2. a *.mw.mjs file anywhere under routeDir, applies to that folder and everything below it
+// www/api/secure.mw.mjs
+export const middleware = { ALL: [requireUser], DELETE: [requireAdmin] }
+// (export default { middleware: ... } is also accepted)
+
+// 3. the route module
+export default {
+  middleware: [requireUser],
+  GET: ({ req }) => req.user
+}
+```
+
+Semantics:
+
+- An array applies to every method. An object maps upper case method names to arrays. `ALL` runs
+  for every method, before the method specific list.
+- Order: config middleware, then each `.mw.mjs` folder from the top down, then the route's own.
+  Several `.mw.mjs` files in one folder run in no guaranteed order, so keep one per folder.
+- Call `next()` to continue. Call `next(err)` or throw to fail the request (goes through error
+  middleware and `errorTransformer`). Or end the response yourself with `res.end(...)`,
+  `res.send(...)` or `res.redirect(...)`, after which the handler does not run. Doing none of
+  these hangs the request.
+- Async middleware is fine, just make sure every path calls `next()` or ends the response.
+- A function with four parameters `(err, req, res, next)` is error middleware. It runs only when
+  something threw, after the normal chain and before the error response is written.
+- Middleware does not run for `WEBSOCKET` handlers or declarative responses. A route that has
+  middleware and exports a declarative response fails to load.
+- Static files under a folder with middleware are served through the middleware, which disables
+  the declarative fast path for them.
+- A route with any middleware takes the slower general path (body is always read before the
+  handler runs). Keep hot JSON endpoints middleware free when it matters.
+
+A typical auth middleware:
+
+```js
+export const middleware = [
+  async (req, res, next) => {
+    const user = await userFromCookie(req.cookies.session)
+    if (!user) {
+      res.statusCode = 401
+      res.end(JSON.stringify({ error: 'unauthorized' }))
+      return
+    }
+    req.user = user
+    next()
+  }
+]
+```
+
+## Static files
+
+Any file under `routeDir` that is not a handler or middleware module is served on `GET`:
+
+- Content type comes from the extension. Override or add with `staticContentTypes: { '.wasm':
+  'application/wasm' }`.
+- Every response carries `ETag` and `Cache-Control`. The default is `max-age=600` (ten
+  minutes). Set `staticCacheControl: 'no-cache'` to make browsers revalidate every time, which
+  gives a 304 when the ETag still matches. Do this for apps that ship ES modules without hashed
+  file names, otherwise a deploy leaves clients running old modules for up to ten minutes.
+- Without `cacheStatic` the file is stat'ed and streamed from disk on every request and the ETag
+  comes from size and mtime, so edits show up immediately.
+- `cacheStatic: true` reads each file into memory on first request and keeps it. Edits are not
+  seen until restart. Production apps set `cacheStatic: process.env.NODE_ENV === 'production'`.
+- With `cacheStatic`, files up to `declarativeStaticMaxSize` (1 MiB) are also compiled into
+  declarative responses served inside uws with no JavaScript per request. Those cannot compare
+  ETags, so conditional requests get a 200 with the full file instead of a 304. Set
+  `declarativeStatic: false` to keep 304s. Files under middleware, the `notFoundRoute` and the
+  `defaultRoute` are never compiled.
+- `index.*` files answer for their folder: `www/app/index.html` serves `/app`, `/app/`,
+  `/app/index` and `/app/index.html`.
+- `resolveWithoutExtension: ['.js']` makes `/foo.js` also answer at `/foo`. `.html` and `.htm` are
+  always in this list.
+- `staticMode: true` serves only static files and ignores `.rt.mjs` modules.
+- Static routes register `GET` only. Other methods fall through to the not found handler.
+
+## Not found pages and single page apps
+
+Both options name a URL path that must match an existing route (a file in `routeDir`, static or
+handler). Spliffy warns at startup when nothing matches.
+
+- `notFoundRoute: '/404.html'`: served with status 404 for any path with no route.
+- `defaultRoute: '/index.html'`: served with status 200 for any path with no route. This is the
+  SPA fallback. It wins over `notFoundRoute`, so an unknown `/api/whatever` also gets the HTML
+  with a 200. Keep API routes under a catch-all (`api+.rt.mjs`) that returns 404 if that matters.
+- The default route handler sees the originally requested path in `req.path`, so one handler can
+  pick between several SPA shells:
+
+```js
+// www/default.rt.mjs, with defaultRoute: '/default'
+const app = fs.readFileSync(new URL('./index.html', import.meta.url))
+const admin = fs.readFileSync(new URL('./admin/index.html', import.meta.url))
+export default {
+  GET: ({ req }) => ({
+    headers: { 'content-type': 'text/html', 'cache-control': 'no-cache' },
+    body: req.path.startsWith('/admin') ? admin : app
+  })
+}
+```
+
+- Both must point at a regular handler or static file. A declarative response cannot be the not
+  found or default route.
+- A folder with an `index.html` can be the target: `defaultRoute: '/ui/'` matches `www/ui/index.html`.
+
+## Serving files from node_modules
+
+`nodeModuleRoutes` exposes individual files from `node_modules` without copying them into
+`routeDir`. Files are listed explicitly, there is no glob or pattern support, on purpose.
+
+```js
+nodeModuleRoutes: {
+  nodeModulesPath: path.join(projectRoot, 'node_modules'),  // default: routeDir/../node_modules
+  routePrefix: 'vendor',                                     // default: 'lib/ext'
+  files: [
+    'htmx.org/dist/htmx.min.js',                             // -> /vendor/htmx.org/dist/htmx.min.js
+    { modulePath: 'croppr/dist/croppr.min.js', urlPath: 'croppr.js' }   // -> /vendor/croppr.js
+  ],
+  method: 'copy',                                            // optional: copy into routeDir at startup instead of serving in place
+  middleware: [...]                                          // optional, applies to these routes
+}
+```
+
+- The default `nodeModulesPath` is `routeDir/../node_modules`. With the common layout
+  `routeDir: './src/public'` that resolves to `src/node_modules`, which does not exist and the
+  server throws `Unable to find node_modules dir`. Set it explicitly.
+- A listed file that does not exist is a warning, not an error.
+- `method: 'copy'` writes the files under `routeDir/<routePrefix>/...` and they are then served as
+  ordinary static files. Add that folder to `.gitignore`.
+
+## WebSockets
+
+Export a `WEBSOCKET` object. It is handed to µWebSockets.js `app.ws()` as is, so every uws
+behaviour and option applies.
+
+```js
+// www/ws/room/$roomId.rt.mjs  ->  ws://host/ws/room/:roomId
+export default {
+  WEBSOCKET: {
+    idleTimeout: 120,                 // seconds, uws options are allowed here
+    maxPayloadLength: 16 * 1024,
+    upgrade: (res, req, context) => {
+      // req is only valid synchronously here: copy out what you need
+      const roomId = req.getParameter(0)                  // path parameters by index
+      const key = req.getHeader('sec-websocket-key')
+      const protocol = req.getHeader('sec-websocket-protocol')
+      const extensions = req.getHeader('sec-websocket-extensions')
+      const cookie = req.getHeader('cookie')
+      let aborted = false
+      res.onAborted(() => { aborted = true })
+      authenticate(cookie).then(user => {
+        if (aborted) return
+        if (!user) return res.cork(() => res.writeStatus('401').end())
+        res.cork(() => res.upgrade({ roomId, user }, key, protocol, extensions, context))
+      })
+    },
+    open: ws => {
+      const { roomId } = ws.getUserData()
+      ws.subscribe(roomId)
+    },
+    message: (ws, message, isBinary) => {
+      const text = Buffer.from(message).toString()         // message is an ArrayBuffer
+      ws.publish(ws.getUserData().roomId, text)
+    },
+    drain: ws => {},                                       // backpressure cleared
+    close: (ws, code, message) => {}                       // ws is unusable here, clean up only
+  }
+}
+```
+
+- Omit `upgrade` to accept every connection. `ws.getUserData()` then returns an empty object you
+  can write to.
+- `ws.send(data, isBinary)` returns 1 on success, 0 when dropped for backpressure, 2 when
+  dropped for high backpressure. `ws.getBufferedAmount()` shows what is queued.
+- Pub/sub (`subscribe`, `unsubscribe`, `publish`) is process local.
+- Middleware does not run for WebSocket routes. Authenticate in `upgrade`.
+- `message` and `close` payloads are `ArrayBuffer`s, convert with `Buffer.from(buf).toString()`.
+- Spliffy does not add anything to `ws`. See the µWebSockets.js docs for `ping`, `pong`,
+  `subscription`, `dropped`, `compression`, `maxBackpressure` and `sendPingsAutomatically`.
+
+## Declarative responses
+
+A handler whose answer is fixed, give or take a value copied from the request, can be described
+up front and run entirely inside uws. No JavaScript runs per request, which is faster than any
+function handler.
+
+```js
+import { declarative } from '@srfnstack/spliffy'
+
+export default {
+  GET: declarative()
+    .writeHeader('content-type', 'text/plain')
+    .writeParameterValue('id')           // path parameter by $name
+    .end(''),
+  POST: declarative().writeStatus('202 Accepted').end('{"queued":true}'),
+  OPTIONS: declarative().writeStatus('204 No Content').writeHeader('allow', 'GET, POST').end('')
+}
+```
+
+Builder methods: `writeStatus('404 Not Found')`, `writeHeader(name, value)`,
+`writeParameterValue(name)`, `writeQueryValue(name)`, `writeHeaderValue(name)`, `writeBody()`
+(echo the request body), `write(text)` (a body chunk), `end(text)`. Always finish with `end`, it
+returns the compiled response. Status, header names and values are limited to 255 bytes, each
+`write` and the `end` text to 64 KiB.
+
+`compileResponse({ statusCode, statusMessage, headers, body })` compiles a fixed response of any
+size (a string or Buffer body) into the same form, for example a prebuilt HTML page.
+
+Limits: no middleware on the route, not usable for `WEBSOCKET`, not usable as `notFoundRoute` or
+`defaultRoute`, values are copied raw (no decoding).
+
+## Logging
+
+```js
+import { log } from '@srfnstack/spliffy'
+log.debug('x', obj); log.info(); log.warn(); log.error(err)   // also trace, fatal
+```
+
+- `logLevel: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'NONE'`, default `INFO`. Lines go to the console
+  with an ISO timestamp.
+- `logger: pino()` (or any object with `trace debug info warn error` methods) replaces the built
+  in logger. `logLevel` is ignored then.
+- Spliffy writes no access log in 1.5.0. Add config middleware if you need one, and avoid logging
+  full URLs when query strings may carry tokens.
+- `printRoutes: true` logs every route at startup, useful to check the file to URL mapping.
+- Uncaught exceptions and unhandled rejections are logged and do not crash the process.
+
+## Full config reference
+
+Only `routeDir` is required. Defaults in brackets.
+
+Server
+- `routeDir` absolute path to the route directory, required
+- `port` [10420]
+- `host` [`::`] listen address
+- `serveRoutesWithSlash` [false] folder index routes also answer with a trailing slash (`/foo/` as well as `/foo`)
+- `autoOptions` [false] generate `OPTIONS` handlers answering 204 with `Allow`
+- `writeDateHeader` [false] add a `Date` header, refreshed once a second
+- `printRoutes` [false] log the route table at startup
+- `middleware` [none] array or `{ METHOD: [...] }` applied to every route
+
+Routing
+- `defaultRoute` path of an existing route served with 200 for unmatched requests (SPA fallback), wins over `notFoundRoute`
+- `notFoundRoute` path of an existing route served with 404 for unmatched requests
+- `resolveWithoutExtension` [`['.html', '.htm']`, always included] extensions that also resolve without the extension
+- `ignoreFilesMatching` [[]] regex strings tested against file names to skip
+- `allowTestFileRoutes` [false] stop skipping `*.test.js` and `*.test.mjs`
+- `staticMode` [false] serve static files only, never load handler modules
+- `decodeQueryParameters` [false] `decodeURIComponent` query keys and values, `+` becomes space
+- `nodeModuleRoutes` [none] see Serving files from node_modules
+
+Static files
+- `staticCacheControl` [`max-age=600`] `Cache-Control` for static files
+- `staticContentTypes` [{}] `{ '.ext': 'type/subtype' }` additions and overrides
+- `cacheStatic` [false] keep file contents in memory after first read
+- `declarativeStatic` [true] with `cacheStatic`, serve small files from inside uws (no 304s)
+- `declarativeStaticMaxSize` [1048576] largest file compiled into a declarative response
+
+Bodies and errors
+- `contentHandlers` [json, text, form, octet-stream] `{ 'type/subtype': { deserialize, serialize } }`
+- `acceptsDefault` [`*/*`] handler used when a request has no `content-type`
+- `defaultContentType` [`*/*`] handler used when a response has no `content-type`
+- `errorTransformer` [identity] `(err, refId) => err`
+- `extendIncomingMessage` [false] give `req` the `http.IncomingMessage` prototype for passport style middleware
+
+Logging
+- `logLevel` [`INFO`]
+- `logger` [built in]
+
+Not functional in 1.5.0, accepted but ignored: `parseCookie` (cookies are always available),
+`decodePathParameters`, `logAccess`, a top level `routePrefix`, `httpsPort`. TLS should be
+terminated by a reverse proxy in front of spliffy.
+
+## Package exports
+
+```js
+import spliffy, {
+  log, redirect, moduleDirname,
+  declarative, compileResponse,
+  parseQuery, setMultiValueKey,
+  HttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, /* ...every 4xx and 5xx */
+} from '@srfnstack/spliffy'
+```
+
+- `moduleDirname(import.meta.url)` is `path.dirname(fileURLToPath(url))`, handy for `routeDir`.
+- `parseQuery(string, decode)` is the query parser used for `url.query`.
+
+## Project conventions that work well
+
+Seen across several production spliffy apps:
+
+- `routeDir: 'src/public'` for everything the network can reach, `src/private` for database and
+  business code imported by the routes. Nothing in `private` is ever served.
+- `api/` folder with a `secure.mw.mjs` at its root that authenticates and sets `req.user`, and
+  public endpoints (login, health, webhooks) either outside `api/` or allow listed inside the
+  middleware by `req.path` prefix.
+- A built SPA in `src/public/ui/` with `defaultRoute: '/ui/'` and `staticCacheControl: 'no-cache'`,
+  or an `index.rt.mjs` that reads the built `index.html` and sets `cache-control: no-store`.
+- Tests next to routes as `*.test.mjs`, started against a real server on a test port.
+- `cacheStatic: process.env.NODE_ENV === 'production'` so dev picks up file edits.
+- Start script reads `PORT` from the environment and passes `parseInt(process.env.PORT || '10420')`.
+
+## Common mistakes
+
+- Using `body` or `query` or `pathParameters` on the context. Use `await bodyPromise`,
+  `url.query`, `url.param('name')`.
+- Lower case method keys (`get:`) or an `ALL:` handler. Startup fails with a message naming the file.
+- Expecting `/foo/` to work. A file route never answers with a trailing slash. A folder index does,
+  but only with `serveRoutesWithSlash: true`.
+- Returning `{ contentType: 'text/html', body }`. Put the type in `headers`.
+- Returning a data object that has a `body` or `headers` key and getting it unwrapped.
+- Setting `defaultRoute` and then wondering why unknown API paths return HTML with a 200.
+- Using `nodeModuleRoutes` with `routeDir: 'src/public'` and not setting `nodeModulesPath`.
+- Shipping ES modules with `cacheStatic` and the default ten minute `Cache-Control`, then
+  deploying. Use `staticCacheControl: 'no-cache'` or hashed file names.
+- Forgetting `res.end()` after manual `res.write()` calls, or forgetting `res.streaming = true`.
+- Expecting multipart form parsing. Use `streamRequestBody: true` with busboy.
+- Keeping a reference to the raw uws `req` inside a WebSocket `upgrade` after an `await`.
+- Expecting `decodeURIComponent` on `url.param()` values. Decode them yourself.
