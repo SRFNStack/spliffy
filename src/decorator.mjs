@@ -33,11 +33,11 @@ export class SpliffyRequest {
    * Read everything from the uws request now. The uws request is only valid while the uws handler
    * is on the stack, so anything that outlives it (promises, body callbacks) must call this first.
    */
-  forceCache () {
-    if (this._headers === null) this._cacheHeaders()
+  forceCache (withHeaders = true) {
+    if (withHeaders && this._headers === null) this._cacheHeaders()
     if (this._spliffyUrl === null) this._cacheSpliffyUrl()
     this._spliffyUrl._readQueryString()
-    if (this._url === null) this._cacheUrl()
+    if (this._url === null) this._url = this._spliffyUrl._queryString ? `${this.path}?${this._spliffyUrl._queryString}` : this.path
   }
 
   _cacheHeaders () {
@@ -156,13 +156,16 @@ export class HandlerContext {
     this.req = req
     this._res = res
     this._decorate = decorate || null
-    this.bodyPromise = bodyPromise
+    this._bodyPromise = bodyPromise || null
     // the parsed body, already read by the time the handler runs. A streamed body is the Readable
     this.body = body === undefined ? null : body
   }
 
   get res () { return this._decorate === null ? this._res : this._decorate(this._res) }
   set res (r) { this._res = r }
+  // a promise of the body, made the first time a handler asks for one
+  get bodyPromise () { return this._bodyPromise || (this._bodyPromise = Promise.resolve(this.body)) }
+  set bodyPromise (p) { this._bodyPromise = p }
   get url () { return this.req.spliffyUrl }
   get headers () { return this.req.headers }
   get cookies () { return this.req.cookies }

@@ -8,4 +8,4 @@ yarn-error.log*
 build
 example/**/*.key
 example/**/*.cert
-coverage
+coverage.claude/worktrees/

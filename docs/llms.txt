@@ -164,6 +164,10 @@ GET: ({ url, headers, bodyPromise, req, res }) => { ... }
 - The underlying µWebSockets.js request is only valid while the handler is synchronous. Spliffy
   copies headers, path, query and parameters before any `await`, so `req` is safe to use after
   awaiting, but do not keep raw uws request references.
+- A handler that destructures its argument, `({ url, body }) => ...`, can only reach the names it
+  lists. When `headers`, `cookies` and `req` are not among them the headers are never copied for it,
+  which is the cheapest a request with a body or an async handler gets. A handler that takes the
+  whole context, `ctx => ...`, gets everything copied.
 - Set `extendIncomingMessage: true` in the config to put `http.IncomingMessage.prototype` behind
   `req` for middleware such as passport that patches that prototype.
 
@@ -395,8 +399,9 @@ Semantics:
   middleware and exports a declarative response fails to load.
 - Static files under a folder with middleware are served through the middleware, which disables
   the declarative fast path for them.
-- A route with any middleware takes the slower general path (body is always read before the
-  handler runs). Keep hot JSON endpoints middleware free when it matters.
+- A route with middleware reads the body before the handler runs and always copies the request
+  headers. Middleware that calls `next` before returning keeps the whole request on the uws
+  callback, so synchronous middleware and a synchronous handler answer without a promise in between.
 
 Compression is built in. `compression()` from the package is middleware that compresses responses the
 client accepts compressed, brotli first then gzip, for text, json, javascript, xml and svg content
@@ -410,8 +415,11 @@ export const middleware = [compression({ threshold: 1024, encodings: ['br', 'gzi
 
 Options: `encodings` [`['br', 'gzip']`] in order of preference, `threshold` [1024] bytes, `brotli`
 and `gzip` are passed to zlib (defaults brotli quality 3, gzip level 6), `filter(contentType)`
-replaces the content type test. A body sent in one piece is compressed in one call. A body written
-in pieces or streamed goes through a zlib stream. Responses that already carry a `content-encoding`
+replaces the content type test. A body sent in one piece is compressed in one call with the
+compression window fitted to the body: a window larger than the body is memory the compressor
+allocates and clears for nothing, and for a few kilobytes that costs more than compressing them.
+Pass `brotli.params[BROTLI_PARAM_LGWIN]` or `gzip.windowBits` to fix the window instead. A body
+written in pieces or streamed goes through a zlib stream with the configured options. Responses that already carry a `content-encoding`
 (precompressed static files) are left alone. A `vary: accept-encoding` header is added.
 
 A typical auth middleware:

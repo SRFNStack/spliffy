@@ -227,6 +227,13 @@ describe('routes with no middleware', () => {
     expect(secure).toEqual({ opcode: 1, text: 'over wss' })
   })
 
+  it('reads what a handler lists before the uws request dies', async () => {
+    const post = await fetch(`${base}/shape?a=1&a=2&b=x`, { method: 'POST', body: '{"n":5}', headers: { 'content-type': 'application/json' } })
+    expect(await post.json()).toEqual({ q: { a: ['1', '2'], b: 'x' }, body: { n: 5 } })
+    const put = await fetch(`${base}/shape`, { method: 'PUT', body: 'hey', headers: { 'content-type': 'text/plain', 'x-tag': 'kept' } })
+    expect(await put.json()).toEqual({ tag: 'kept', body: 'hey' })
+  })
+
   it('echoes octet-stream bodies byte for byte', async () => {
     for (const size of [1, 1024, 10240, 102400]) {
       const body = require('crypto').randomBytes(size)

@@ -89,6 +89,51 @@ export function preProcessMiddleware (middleware) {
   return hasAny ? processed : null
 }
 
+/**
+ * Run a middleware list. When every middleware calls next before returning the whole chain runs on
+ * the caller's stack and this returns true, a thrown error or an error passed to next is thrown.
+ * Otherwise a promise is returned that settles when the chain does.
+ * @returns {true|Promise}
+ */
+export function runMiddleware (middleware, req, res, reqErr) {
+  let current = 0
+  let settled = false
+  let failure = null
+  let settle = null
+  let fail = null
+  const next = err => {
+    if (err) {
+      if (settle === null) {
+        settled = true
+        failure = err
+      } else fail(err)
+      return
+    }
+    if (res.writableEnded || current === middleware.length) {
+      if (settle === null) settled = true
+      else settle()
+      return
+    }
+    const mw = middleware[current++]
+    try {
+      if (reqErr) mw(reqErr, req, res, next)
+      else mw(req, res, next)
+    } catch (e) {
+      log.error('Middleware threw exception', e)
+      next(e)
+    }
+  }
+  next()
+  if (settled) {
+    if (failure) throw failure
+    return true
+  }
+  return new Promise((resolve, reject) => {
+    settle = resolve
+    fail = reject
+  })
+}
+
 export async function invokeMiddleware (middleware, req, res, reqErr) {
   if (!middleware || middleware.length === 0) return
   return new Promise((resolve, reject) => {

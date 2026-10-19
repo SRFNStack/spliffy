@@ -1,7 +1,8 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
-import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
+import { runMiddleware, preProcessMiddleware } from './middleware.mjs'
 import { responseProto, decorateResponse, isDecorated, SpliffyRequest, HandlerContext, uwsCallback } from './decorator.mjs'
+import { contextNames, readsHeaders } from './handlerShape.mjs'
 import { v4 as uuid } from 'uuid'
 import { defaultStatusMessages } from './httpStatusCodes.mjs'
 import stream from 'stream'
@@ -25,32 +26,6 @@ class BodilessContext extends HandlerContext {
   }
 
   set body (b) { this._body = b }
-
-  get bodyPromise () {
-    return this._bodyPromise || (this._bodyPromise = Promise.resolve(this.body))
-  }
-
-  set bodyPromise (p) { this._bodyPromise = p }
-}
-
-const executeHandler = async (url, res, req, bodyPromise, handler, middleware, errorTransformer) => {
-  try {
-    const bodyContent = await (bodyPromise || NULL_PROMISE)
-    if (!res.writableEnded) {
-      const deserializedBody = (bodyContent instanceof Readable || !bodyContent)
-        ? bodyContent
-        : deserializeBody(bodyContent, req.headers['content-type'], res.acceptsDefault)
-
-      const handled = await handler(new HandlerContext(req, res, Promise.resolve(deserializedBody), null, deserializedBody))
-      finalizeResponse(req, res, handled, handler.statusCodeOverride)
-    }
-  } catch (e) {
-    const refId = uuid()
-    if (middleware) {
-      try { await executeMiddleware(middleware, req, res, errorTransformer, refId, e) } catch (me) { log.error(me) }
-    }
-    endError(res, e, refId, errorTransformer)
-  }
 }
 
 const endError = (res, e, refId, errorTransformer) => {
@@ -115,17 +90,22 @@ const doSerializeBody = (body, res) => {
   return serialized?.data || ''
 }
 
-async function executeMiddleware (processedMiddleware, req, res, errorTransformer, refId, e) {
-  if (!processedMiddleware) return
-  const methodMiddleware = processedMiddleware[req.method]
-  const allMiddleware = processedMiddleware.ALL
-  if (e) {
-    if (allMiddleware?.error) await invokeMiddleware(allMiddleware.error, req, res, e)
-    if (methodMiddleware?.error) await invokeMiddleware(methodMiddleware.error, req, res, e)
-  } else {
-    if (allMiddleware?.normal) await invokeMiddleware(allMiddleware.normal, req, res)
-    if (methodMiddleware?.normal) await invokeMiddleware(methodMiddleware.normal, req, res)
+/**
+ * Run the middleware for a request: everything registered for all methods, then the method's own.
+ * Returns true when the whole chain ran synchronously, otherwise a promise. An error thrown by a
+ * synchronous chain is thrown.
+ */
+const executeMiddleware = (processedMiddleware, req, res, e) => {
+  const all = processedMiddleware.ALL
+  const method = processedMiddleware[req.method]
+  const first = all ? (e ? all.error : all.normal) : null
+  const second = method ? (e ? method.error : method.normal) : null
+  const runSecond = () => (second && second.length > 0) ? runMiddleware(second, req, res, e) : true
+  if (first && first.length > 0) {
+    const ran = runMiddleware(first, req, res, e)
+    if (ran !== true) return ran.then(runSecond)
   }
+  return runSecond()
 }
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'CONNECT', 'TRACE', 'WEBSOCKET']
@@ -134,18 +114,19 @@ let currentDate = ''
 let dateInterval = null
 
 /**
- * Collect the request body, then resolve with it. Resolves with an empty Buffer when there is no body.
+ * Collect the request body, then hand it to the callback. The callback gets an empty Buffer when
+ * there is no body, and runs inside the uws data callback.
  */
-const collectBody = (res) => new Promise(resolve => {
+const collectBody = (res, onBody) => {
   let buffer = null
   res.onData((data, isLast) => {
     if (data.byteLength > 0) {
       const chunk = Buffer.concat([Buffer.from(data)])
       buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
     }
-    if (isLast) resolve(buffer || EMPTY_BODY)
+    if (isLast) onBody(buffer || EMPTY_BODY)
   })
-})
+}
 
 const streamBody = (res) => {
   const readable = new Readable({ read () {} })
@@ -155,30 +136,98 @@ const streamBody = (res) => {
       if (isLast) readable.push(null)
     }
   })
-  return Promise.resolve(readable)
+  return readable
 }
 
-const handleRequest = async (sReq, res, handler, processedMiddleware, config) => {
-  try {
-    let reqBodyPromise = NULL_PROMISE
-    if (sReq.method !== 'GET' && sReq.method !== 'HEAD') {
-      reqBodyPromise = handler.streamRequestBody ? streamBody(res) : collectBody(res)
-    }
+const NO_BODY_YET = Symbol('noBodyYet')
 
-    if (processedMiddleware) {
-      await executeMiddleware(processedMiddleware, sReq, res, config.errorTransformer)
-      if (!res.writableEnded && !res.ended) {
-        await executeHandler(sReq.spliffyUrl, res, sReq, reqBodyPromise, handler, processedMiddleware, config.errorTransformer)
-      }
-    } else {
-      await executeHandler(sReq.spliffyUrl, res, sReq, reqBodyPromise, handler, null, config.errorTransformer)
-    }
-  } catch (e) {
+/**
+ * The full request pipeline: middleware, body, handler, response. Everything that answers
+ * synchronously stays on the uws stack, a middleware that calls next later or a handler that returns
+ * a promise moves the rest of the pipeline to a continuation.
+ */
+const handleRequest = (sReq, res, handler, processedMiddleware, config) => {
+  const errorTransformer = config.errorTransformer
+  const wantsBody = sReq.method !== 'GET' && sReq.method !== 'HEAD'
+  // the body collector must be in place before the uws callback returns, whatever the middleware
+  // is still doing, so both sides of the join are tracked here
+  let body = wantsBody ? NO_BODY_YET : null
+  let middlewareDone = false
+
+  const onError = e => {
     const refId = uuid()
+    const after = () => { if (!res.writableEnded) endError(res, e, refId, errorTransformer) }
     if (processedMiddleware) {
-      await executeMiddleware(processedMiddleware, sReq, res, config.errorTransformer, refId, e)
+      try {
+        const ran = executeMiddleware(processedMiddleware, sReq, res, e)
+        if (ran !== true) {
+          ran.then(after, me => { log.error(me); after() })
+          return
+        }
+      } catch (me) {
+        log.error(me)
+      }
     }
-    if (!res.writableEnded) { endError(res, e, refId, config.errorTransformer) }
+    after()
+  }
+
+  const runHandler = () => {
+    if (res.writableEnded || res.ended) return
+    try {
+      const content = (body instanceof Readable || !body)
+        ? body
+        : deserializeBody(body, sReq.headers['content-type'], res.acceptsDefault)
+      const handled = handler(new HandlerContext(sReq, res, null, null, content))
+      if (handled instanceof Promise) {
+        // the answer comes after the uws callback has returned, so uws must know about an abort
+        res.ensureOnAborted()
+        handled.then(h => finalizeResponse(sReq, res, h, handler.statusCodeOverride)).catch(onError)
+      } else {
+        finalizeResponse(sReq, res, handled, handler.statusCodeOverride)
+      }
+    } catch (e) {
+      onError(e)
+    }
+  }
+
+  const bodyArrived = content => {
+    body = content
+    if (middlewareDone) {
+      uwsCallback.active = true
+      try { runHandler() } finally { uwsCallback.active = false }
+    }
+  }
+
+  const afterMiddleware = () => {
+    middlewareDone = true
+    if (body !== NO_BODY_YET) runHandler()
+  }
+
+  if (wantsBody) {
+    if (handler.streamRequestBody) {
+      res.ensureOnAborted()
+      body = streamBody(res)
+    } else if (hasBody(sReq._uwsReq)) {
+      // the body arrives after the uws callback has returned
+      res.ensureOnAborted()
+      collectBody(res, bodyArrived)
+    } else {
+      body = EMPTY_BODY
+    }
+  }
+
+  try {
+    if (processedMiddleware) {
+      const ran = executeMiddleware(processedMiddleware, sReq, res)
+      if (ran !== true) {
+        res.ensureOnAborted()
+        ran.then(afterMiddleware, onError)
+        return
+      }
+    }
+    afterMiddleware()
+  } catch (e) {
+    onError(e)
   }
 }
 
@@ -186,7 +235,8 @@ const handleRequest = async (sReq, res, handler, processedMiddleware, config) =>
 // nothing to wait for
 const hasBody = req => {
   const contentLength = req.getHeader('content-length')
-  return (contentLength !== '' && contentLength !== '0') || req.getHeader('transfer-encoding') !== ''
+  if (contentLength !== '' && contentLength !== '0') return true
+  return req.getHeader('transfer-encoding') !== ''
 }
 
 const fail = (res, e) => {
@@ -195,6 +245,16 @@ const fail = (res, e) => {
     res.statusCode = 500
     res.end()
   }
+}
+
+/**
+ * Tell uws what to do when the client goes away, without turning the response into a spliffy one.
+ * The flags it sets are the ones the spliffy response reads, so decorating it later changes nothing.
+ */
+const watchAbort = res => {
+  if (res._onAbortedRegistered) return
+  res._onAbortedRegistered = true
+  res.onAborted(() => { res.ended = true; res.writableEnded = true; res.finalized = true })
 }
 
 // parked for the synchronous cork callbacks below, same trick as the response prototype uses
@@ -258,6 +318,9 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
   // without middleware or body streaming the handler can be called directly from the uws callback
   const direct = !processedMiddleware && !handler.streamRequestBody
   const noBody = method === 'GET' || method === 'HEAD'
+  // a handler that lists what it takes from the context cannot reach the headers it leaves out, so
+  // they are not copied from the uws request for it
+  const withHeaders = readsHeaders(contextNames(handler))
   const errorTransformer = config.errorTransformer
   const acceptsDefault = config.acceptsDefault
   // the raw uws end of the last response seen: http and https responses have different prototypes
@@ -282,7 +345,7 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
     }
     if (handled instanceof Promise) {
       // the uws request dies when this callback returns, read everything the handler may still want
-      context.req.forceCache()
+      context.req.forceCache(withHeaders)
       decorate(res).ensureOnAborted()
       handled.then(h => finalizeResponse(null, res, h, handler.statusCodeOverride))
         .catch(e => endError(res, e, uuid(), errorTransformer))
@@ -339,9 +402,10 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
           invoke(res, new BodilessContext(sReq, res, acceptsDefault, decorate))
           return
         }
-        sReq.forceCache()
-        decorate(res)
-        res.ensureOnAborted()
+        // the body's type is all the handler needs from the headers unless it can reach them
+        const contentType = withHeaders ? null : req.getHeader('content-type')
+        sReq.forceCache(withHeaders)
+        watchAbort(res)
         let buffer = null
         res.onData((data, isLast) => {
           if (data.byteLength > 0) {
@@ -351,10 +415,10 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
           if (!isLast || res.ended) return
           uwsCallback.active = true
           try {
-            const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], acceptsDefault)
-            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body), decorate, body))
+            const body = deserializeBody(buffer || EMPTY_BODY, withHeaders ? sReq._headers['content-type'] : contentType, acceptsDefault)
+            invoke(res, new HandlerContext(sReq, res, null, decorate, body))
           } catch (e) {
-            endError(res, e, uuid(), errorTransformer)
+            endError(decorate(res), e, uuid(), errorTransformer)
           } finally {
             uwsCallback.active = false
           }
@@ -363,8 +427,7 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
         const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
         sReq.forceCache()
         decorate(res)
-        res.ensureOnAborted()
-        handleRequest(sReq, res, handler, processedMiddleware, config).catch(e => fail(res, e))
+        handleRequest(sReq, res, handler, processedMiddleware, config)
       }
     } catch (e) {
       fail(res, e)
@@ -404,7 +467,6 @@ export const createNotFoundHandler = config => {
       const handler = pickHandler(sReq)
       if (handler) sReq._paramToIndex = handler.paramToIndex || {}
       sReq.forceCache()
-      res.ensureOnAborted()
       if (handler && typeof handler === 'object') {
         const processedMiddleware = preProcessMiddleware(handler.middleware)
         if (handler.handlers && typeof handler.handlers[sReq.method] === 'function') {
@@ -413,13 +475,6 @@ export const createNotFoundHandler = config => {
             h.statusCodeOverride = handler.statusCodeOverride
           }
           handleRequest(sReq, res, h, processedMiddleware, config)
-            .catch(e => {
-              log.error('Unexpected exception during request handling', e)
-              if (!res.writableEnded) {
-                res.statusCode = 500
-                res.end()
-              }
-            })
         } else {
           res.statusCode = 404
           res.end()
