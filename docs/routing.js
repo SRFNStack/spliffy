@@ -1,4 +1,5 @@
-import { div, h3, li, p, strong, ul, span } from './fnelements.mjs'
+import { div, h3, li, p, strong, ul, span, code } from './fnelements.mjs'
+import prismCode from './prismCode.js'
 
 const folder = (name) => span({ class: 'folder' }, name)
 const file = (name) => span({ class: 'file' }, name)
@@ -82,7 +83,32 @@ export default div(
   ul(
     li('/www/strains/gorillaGlue/info/something/more/stuff'),
     li('/www/strains/blueDream/dankness/allOfIt')
-  )
-  // TODO update docs for middleware
+  ),
+  h3({ id: 'declarative-responses' }, 'Declarative responses'),
+  p('A handler that always answers the same way, give or take a value copied from the request, does not need to run javascript at all. ',
+    'Describe the response up front with ', code('declarative()'), ' and export the result instead of a function. ',
+    'The description is compiled once at startup and executed entirely inside µWebSockets.js, so requests to the route never enter javascript. ',
+    'This is faster than any function handler, even a raw µWebSockets.js callback.'),
+  prismCode(`import { declarative } from '@srfnstack/spliffy'
 
+export default {
+    // GET /strains/:strainName  ->  200 with the strain name as the body
+    GET: declarative()
+        .writeHeader('content-type', 'text/plain')
+        .writeParameterValue('strainName')
+        .end(''),
+    // POST /strains/:strainName  ->  202 with a fixed body
+    POST: declarative().writeStatus('202 Accepted').end('{"queued":true}')
+}`),
+  p('The response can write a status, headers and body text, and copy values from the request:'),
+  ul(
+    li(code('writeParameterValue(name)'), ': a path parameter, by the name of the $ folder or file'),
+    li(code('writeQueryValue(name)'), ': a query parameter'),
+    li(code('writeHeaderValue(name)'), ': a request header'),
+    li(code('writeBody()'), ': the request body')
+  ),
+  p('Nothing runs per request, so middleware does not apply: a route file that has middleware, ',
+    'or that is used as the notFoundRoute or defaultRoute, fails to load if it exports a declarative response. ',
+    'Values are copied as they appear on the wire, path and query parameters are not decoded.')
+  // TODO update docs for middleware
 )

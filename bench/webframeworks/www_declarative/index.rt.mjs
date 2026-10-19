@@ -1,0 +1,3 @@
+import { declarative } from '../../../src/index.mjs'
+
+export default { GET: declarative().end('') }

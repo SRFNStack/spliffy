@@ -1,12 +1,31 @@
 import log from './log.mjs'
 import { deserializeBody, serializeBody } from './content.mjs'
 import { invokeMiddleware, preProcessMiddleware } from './middleware.mjs'
-import { decorateResponse, SpliffyRequest } from './decorator.mjs'
+import { responseProto, SpliffyRequest, HandlerContext } from './decorator.mjs'
 import { v4 as uuid } from 'uuid'
 import stream from 'stream'
 const { Readable } = stream
 
 const NULL_PROMISE = Promise.resolve(null)
+const EMPTY_BODY = Buffer.alloc(0)
+const METHOD_NAMES = { get: 'GET', post: 'POST', put: 'PUT', patch: 'PATCH', delete: 'DELETE', options: 'OPTIONS', head: 'HEAD', connect: 'CONNECT', trace: 'TRACE' }
+
+/**
+ * The context for a request without a body. The body is only deserialized when a handler asks
+ * for it, which must happen before the handler first yields, same as the headers.
+ */
+class BodilessContext extends HandlerContext {
+  constructor (req, res, acceptsDefault) {
+    super(req, res, null)
+    this._acceptsDefault = acceptsDefault
+  }
+
+  get bodyPromise () {
+    return this._bodyPromise || (this._bodyPromise = Promise.resolve(deserializeBody(EMPTY_BODY, this.req.headers['content-type'], this._acceptsDefault)))
+  }
+
+  set bodyPromise (p) { this._bodyPromise = p }
+}
 
 const executeHandler = async (url, res, req, bodyPromise, handler, middleware, errorTransformer) => {
   try {
@@ -80,7 +99,7 @@ const pipeResponse = (res, readStream, errorTransformer) => {
 }
 
 const doSerializeBody = (body, res) => {
-  const contentType = res.headers['content-type']
+  const contentType = res.getHeader('content-type')
   const serialized = serializeBody(body, contentType, res.acceptsDefault)
   if (serialized?.contentType && !contentType) {
     res.headers['content-type'] = serialized.contentType
@@ -106,26 +125,36 @@ export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS',
 let currentDate = ''
 let dateInterval = null
 
+/**
+ * Collect the request body, then resolve with it. Resolves with an empty Buffer when there is no body.
+ */
+const collectBody = (res) => new Promise(resolve => {
+  let buffer = null
+  res.onData((data, isLast) => {
+    if (data.byteLength > 0) {
+      const chunk = Buffer.concat([Buffer.from(data)])
+      buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
+    }
+    if (isLast) resolve(buffer || EMPTY_BODY)
+  })
+})
+
+const streamBody = (res) => {
+  const readable = new Readable({ read () {} })
+  res.onData((data, isLast) => {
+    if (data.byteLength > 0 || isLast) {
+      readable.push(Buffer.concat([Buffer.from(data)]))
+      if (isLast) readable.push(null)
+    }
+  })
+  return Promise.resolve(readable)
+}
+
 const handleRequest = async (sReq, res, handler, processedMiddleware, config) => {
   try {
     let reqBodyPromise = NULL_PROMISE
     if (sReq.method !== 'GET' && sReq.method !== 'HEAD') {
-      if (handler.streamRequestBody) {
-        const readable = new Readable({ read () {} })
-        reqBodyPromise = Promise.resolve(readable)
-        res.onData((data, isLast) => {
-          if (data.byteLength > 0 || isLast) {
-            readable.push(Buffer.concat([Buffer.from(data)]))
-            if (isLast) readable.push(null)
-          }
-        })
-      } else {
-        reqBodyPromise = new Promise(resolve => res.onData((data, isLast) => {
-          const chunk = Buffer.concat([Buffer.from(data)])
-          res._buffer = res._buffer ? Buffer.concat([res._buffer, chunk]) : chunk
-          if (isLast) resolve(res._buffer)
-        }))
-      }
+      reqBodyPromise = handler.streamRequestBody ? streamBody(res) : collectBody(res)
     }
 
     if (processedMiddleware) {
@@ -145,6 +174,21 @@ const handleRequest = async (sReq, res, handler, processedMiddleware, config) =>
   }
 }
 
+// a request without content-length or transfer-encoding has no body (rfc 7230 section 3.3), so there is
+// nothing to wait for
+const hasBody = req => {
+  const contentLength = req.getHeader('content-length')
+  return (contentLength !== '' && contentLength !== '0') || req.getHeader('transfer-encoding') !== ''
+}
+
+const fail = (res, e) => {
+  log.error('Failed handling request', e)
+  if (!res.writableEnded) {
+    res.statusCode = 500
+    res.end()
+  }
+}
+
 export const createHandler = (handler, middleware, paramToIndex, config, urlPath) => {
   const processedMiddleware = preProcessMiddleware(middleware)
   if (config.writeDateHeader && !dateInterval) {
@@ -152,59 +196,75 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
     dateInterval = setInterval(() => { currentDate = new Date().toUTCString() }, 1000)
   }
 
-  const isWildcardPath = urlPath?.indexOf('*') > -1
+  // wildcard routes read the url from the request, static routes already know it
+  const staticPath = urlPath?.indexOf('*') > -1 ? null : urlPath
+  // without middleware or body streaming the handler can be called directly from the uws callback
+  const direct = !processedMiddleware && !handler.streamRequestBody
+  const errorTransformer = config.errorTransformer
+  let resProto = null
 
-  // Pre-allocated request object for sync path
-  const syncSReq = new SpliffyRequest(null, paramToIndex, null, config)
-  const syncContext = {
-    get url () { return syncSReq.spliffyUrl },
-    bodyPromise: NULL_PROMISE,
-    get headers () { return syncSReq.headers },
-    req: syncSReq,
-    res: null
+  // call the handler and send whatever it returns
+  const invoke = (res, context) => {
+    let handled
+    try {
+      handled = handler(context)
+    } catch (e) {
+      endError(res, e, uuid(), errorTransformer)
+      return
+    }
+    if (handled instanceof Promise) {
+      // the uws request dies when this callback returns, read everything the handler may still want
+      context.req.forceCache()
+      res.ensureOnAborted()
+      handled.then(h => finalizeResponse(null, res, h, handler.statusCodeOverride))
+        .catch(e => endError(res, e, uuid(), errorTransformer))
+    } else if (typeof handled === 'string' || handled instanceof Buffer) {
+      end(res, 200, handler.statusCodeOverride, handled)
+    } else {
+      finalizeResponse(null, res, handled, handler.statusCodeOverride)
+    }
   }
 
   return function (res, req) {
     try {
+      Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
       const rawMethod = req.getMethod()
-      if (!processedMiddleware && !handler.streamRequestBody && (rawMethod === 'get' || rawMethod === 'head')) {
-        // HYPER FAST PATH
-        const method = rawMethod === 'get' ? 'GET' : 'HEAD'
-        syncSReq.init(req, paramToIndex, res, config, method, isWildcardPath ? null : urlPath)
-        syncContext.res = res
-        decorateResponse(res, syncSReq, finalizeResponse, config.errorTransformer, endError, config)
-        const handled = handler(syncContext)
-        if (handled instanceof Promise) {
-          syncSReq.forceCache()
-          res.ensureOnAborted()
-          handled.then(h => finalizeResponse(syncSReq, res, h, handler.statusCodeOverride))
-            .catch(e => endError(res, e, uuid(), config.errorTransformer))
-        } else if (typeof handled === 'string' || handled instanceof Buffer) {
-          end(res, 200, handler.statusCodeOverride, handled)
-        } else {
-          finalizeResponse(syncSReq, res, handled, handler.statusCodeOverride)
+      if (direct && (rawMethod === 'get' || rawMethod === 'head')) {
+        // no body to wait for: the request is only read while the uws request is still valid
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, rawMethod === 'get' ? 'GET' : 'HEAD', staticPath)
+        invoke(res, new HandlerContext(sReq, res, NULL_PROMISE))
+      } else if (direct) {
+        // the uws request is gone by the time the body arrives, so read it all now
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, METHOD_NAMES[rawMethod] || rawMethod.toUpperCase(), staticPath)
+        if (!hasBody(req)) {
+          // nothing to wait for, so the handler runs now while the uws request is still readable
+          invoke(res, new BodilessContext(sReq, res, config.acceptsDefault))
+          return
         }
-      } else {
-        const sReq = new SpliffyRequest(req, paramToIndex, res, config)
         sReq.forceCache()
-        decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
         res.ensureOnAborted()
-
-        handleRequest(sReq, res, handler, processedMiddleware, config)
-          .catch(e => {
-            log.error('Failed handling request', e)
-            if (!res.writableEnded) {
-              res.statusCode = 500
-              res.end()
-            }
-          })
+        let buffer = null
+        res.onData((data, isLast) => {
+          if (data.byteLength > 0) {
+            const chunk = Buffer.concat([Buffer.from(data)])
+            buffer = buffer ? Buffer.concat([buffer, chunk]) : chunk
+          }
+          if (!isLast || res.ended) return
+          try {
+            const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], config.acceptsDefault)
+            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body)))
+          } catch (e) {
+            endError(res, e, uuid(), errorTransformer)
+          }
+        })
+      } else {
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, null, staticPath)
+        sReq.forceCache()
+        res.ensureOnAborted()
+        handleRequest(sReq, res, handler, processedMiddleware, config).catch(e => fail(res, e))
       }
     } catch (e) {
-      log.error('Failed handling request', e)
-      if (!res.writableEnded) {
-        res.statusCode = 500
-        res.end()
-      }
+      fail(res, e)
     }
   }
 }
@@ -212,11 +272,12 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
 export const createNotFoundHandler = config => {
   const handler = config.defaultRouteHandler || config.notFoundRouteHandler
   const paramToIndex = handler?.paramToIndex || {}
+  let resProto = null
   return (res, req) => {
     try {
+      Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
       const sReq = new SpliffyRequest(req, paramToIndex, res, config)
       sReq.forceCache()
-      decorateResponse(res, sReq, finalizeResponse, config.errorTransformer, endError, config)
       res.ensureOnAborted()
       if (handler && typeof handler === 'object') {
         const processedMiddleware = preProcessMiddleware(handler.middleware)

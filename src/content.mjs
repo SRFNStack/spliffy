@@ -1,11 +1,24 @@
 import contentTypes from './content-types.mjs'
 import { parseQuery } from './url.mjs'
 
+// a quick look at the first byte so content that cannot be json is handed back without paying for
+// the exception JSON.parse would throw
+const JSON_STARTS = new Set([0x7b, 0x5b, 0x22, 0x2d, 0x74, 0x66, 0x6e, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]) // { [ " - t f n 0-9
+const looksLikeJson = o => {
+  const isString = typeof o === 'string'
+  for (let i = 0, l = o.length; i < l; i++) {
+    const c = isString ? o.charCodeAt(i) : o[i]
+    if (c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d) continue
+    return JSON_STARTS.has(c)
+  }
+  return false
+}
+
 const defaultHandler = {
   deserialize: o => {
-    if (!o) return o
+    if (!o || o.length === 0 || !looksLikeJson(o)) return o
     try {
-      return JSON.parse(o && o.toString())
+      return JSON.parse(o.toString())
     } catch (e) {
       return o
     }
@@ -43,7 +56,7 @@ const toFormData = (key, value) => {
 
 const contentHandlers = {
   'application/json': {
-    deserialize: s => s && JSON.parse(s && s.toString()),
+    deserialize: s => (s && s.length > 0) ? JSON.parse(s.toString()) : s,
     serialize: o => o && JSON.stringify(o)
   },
   'text/plain': {

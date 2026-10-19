@@ -4,6 +4,7 @@ import { getContentTypeByExtension } from './content.mjs'
 import fs from 'fs'
 import path from 'path'
 import { HTTP_METHODS } from './handler.mjs'
+import { isDeclarative } from './declarative.mjs'
 import util from 'util'
 
 const { promisify } = util
@@ -144,8 +145,18 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
     if (typeof loadedHandler.handler === 'function') {
       handler = loadedHandler.handler
     }
+    if (isDeclarative(handler)) {
+      if (method === 'WEBSOCKET') {
+        throw new Error(`Websocket in file ${filePath} must be an object. Got a declarative response`)
+      }
+      if (Object.keys(route.middleware).some(m => route.middleware[m].length > 0)) {
+        throw new Error(`Request method ${method} in file ${filePath} is a declarative response, which runs inside uWebSockets.js and cannot have middleware`)
+      }
+      route.handlers[method] = handler
+      continue
+    }
     if (typeof handler !== 'function' && method !== 'WEBSOCKET') {
-      throw new Error(`Request method ${method} in file ${filePath} must be a function. Got: ${typeof handlers[method]}`)
+      throw new Error(`Request method ${method} in file ${filePath} must be a function or a declarative response. Got: ${typeof handlers[method]}`)
     } else if (method === 'WEBSOCKET' && typeof handler !== 'object') {
       throw new Error(`Websocket in file ${filePath} must be an object. Got: ${typeof handlers[method]}`)
     }

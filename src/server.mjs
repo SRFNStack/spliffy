@@ -3,6 +3,7 @@ import { getNodeModuleRoutes } from './nodeModuleHandler.mjs'
 import uws from 'uWebSockets.js'
 import { createHandler, createNotFoundHandler } from './handler.mjs'
 import { findRoutes } from './routes.mjs'
+import { isDeclarative } from './declarative.mjs'
 import path from 'path'
 import fs from 'fs'
 
@@ -66,6 +67,14 @@ const getHttpsApp = (key, cert) => {
   })
 }
 
+const rejectDeclarative = (route, use) => {
+  for (const method in route.handlers) {
+    if (isDeclarative(route.handlers[method])) {
+      throw new Error(`${route.filePath} is ${use} but ${method} is a declarative response, which cannot be reused for other paths`)
+    }
+  }
+}
+
 export async function startServer (config) {
   if (!state.initialized) {
     state.initialized = true
@@ -86,10 +95,12 @@ export async function startServer (config) {
       }
       const routePattern = `^${route.urlPath.replace(/:[^/]+/g, '[^/]+').replace(/\*/g, '.*')}$`
       if (config.notFoundRoute && config.notFoundRoute.match(routePattern)) {
+        rejectDeclarative(route, 'the not found route')
         config.notFoundRouteHandler = route
         route.statusCodeOverride = 404
       }
       if (config.defaultRoute && config.defaultRoute.match(routePattern)) {
+        rejectDeclarative(route, 'the default route')
         config.defaultRouteHandler = route
       }
       let hadSlash = false
@@ -99,7 +110,7 @@ export async function startServer (config) {
       }
       for (const method in route.handlers) {
         let theHandler = null
-        if (method === 'WEBSOCKET') {
+        if (method === 'WEBSOCKET' || isDeclarative(route.handlers[method])) {
           theHandler = route.handlers[method]
         } else {
           theHandler = createHandler(route.handlers[method], route.middleware, route.paramToIndex, config, route.urlPath)
