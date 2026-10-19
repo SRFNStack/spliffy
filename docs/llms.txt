@@ -409,7 +409,7 @@ export const middleware = [compression({ threshold: 1024, encodings: ['br', 'gzi
 ```
 
 Options: `encodings` [`['br', 'gzip']`] in order of preference, `threshold` [1024] bytes, `brotli`
-and `gzip` are passed to zlib (defaults brotli quality 4, gzip level 6), `filter(contentType)`
+and `gzip` are passed to zlib (defaults brotli quality 3, gzip level 6), `filter(contentType)`
 replaces the content type test. A body sent in one piece is compressed in one call. A body written
 in pieces or streamed goes through a zlib stream. Responses that already carry a `content-encoding`
 (precompressed static files) are left alone. A `vary: accept-encoding` header is added.

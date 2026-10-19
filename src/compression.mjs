@@ -12,12 +12,12 @@ const bufferOf = body => typeof body === 'string' ? Buffer.from(body) : body
  *
  * @param options.encodings The encodings to offer, in order of preference. Default ['br', 'gzip']
  * @param options.threshold The smallest body to compress, in bytes. Default 1024
- * @param options.brotli zlib brotli options. Default quality 4
+ * @param options.brotli zlib brotli options. Default quality 3, which is smaller than gzip at level 6 and faster
  * @param options.gzip zlib gzip options. Default level 6
  * @param options.filter (contentType) => boolean to decide what gets compressed. Default text, json, javascript, xml and svg
  */
 export function compression ({ encodings = ['br', 'gzip'], threshold = 1024, brotli, gzip, filter } = {}) {
-  const brotliOptions = brotli || { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }
+  const brotliOptions = brotli || { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 3 } }
   const gzipOptions = gzip || { level: 6 }
   const compressible = filter || (contentType => COMPRESSIBLE.test(contentType))
 

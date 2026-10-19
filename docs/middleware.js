@@ -113,7 +113,7 @@ export const middleware = [
     compression({
         encodings: ['br', 'gzip'],   // in order of preference, default ['br', 'gzip']
         threshold: 1024,             // smallest body to compress, default 1024
-        brotli: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }, // zlib brotli options, default quality 4
+        brotli: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 3 } }, // zlib brotli options, default quality 3
         gzip: { level: 6 },          // zlib gzip options, default level 6
         filter: contentType => contentType.startsWith('text/') // replaces the content type test
     })
