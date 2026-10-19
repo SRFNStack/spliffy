@@ -1,5 +1,5 @@
-import { validateMiddleware, mergeMiddleware } from './middleware.mjs'
-import { createStaticHandler } from './staticHandler.mjs'
+import { validateMiddleware, mergeMiddleware, hasMiddleware } from './middleware.mjs'
+import { createStaticHandler, compileStaticResponse } from './staticHandler.mjs'
 import { getContentTypeByExtension } from './content.mjs'
 import fs from 'fs'
 import path from 'path'
@@ -149,7 +149,7 @@ const buildJSHandlerRoute = async (name, filePath, urlPath, inheritedMiddleware,
       if (method === 'WEBSOCKET') {
         throw new Error(`Websocket in file ${filePath} must be an object. Got a declarative response`)
       }
-      if (Object.keys(route.middleware).some(m => route.middleware[m].length > 0)) {
+      if (hasMiddleware(route.middleware)) {
         throw new Error(`Request method ${method} in file ${filePath} is a declarative response, which runs inside uWebSockets.js and cannot have middleware`)
       }
       route.handlers[method] = handler
@@ -186,6 +186,11 @@ const buildStaticRoutes = (name, filePath, urlPath, inheritedMiddleware, pathPar
     filePath,
     handlers: createStaticHandler(filePath, contentType, config.cacheStatic, config.staticCacheControl),
     middleware: inheritedMiddleware
+  }
+  if (config.cacheStatic && config.declarativeStatic) {
+    // the same response compiled to run inside uws, used when nothing has to run per request
+    const compiled = compileStaticResponse(filePath, contentType, config.staticCacheControl, config.declarativeStaticMaxSize)
+    if (compiled) route.declarativeHandlers = { GET: compiled }
   }
 
   routes.push(route)

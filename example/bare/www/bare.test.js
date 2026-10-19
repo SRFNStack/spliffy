@@ -1,4 +1,6 @@
 const fetch = require('node-fetch')
+const fs = require('fs')
+const path = require('path')
 
 const base = 'http://localhost:11421'
 
@@ -80,5 +82,26 @@ describe('routes with no middleware', () => {
     const post = await fetch(`${base}/decl/bob`, { method: 'POST', body: 'ignored' })
     expect(post.status).toBe(202)
     expect(await post.text()).toBe('accepted')
+  })
+
+  it('serves cached static files as compiled responses', async () => {
+    const res = await fetch(`${base}/static/hello.txt`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/plain')
+    expect(res.headers.get('cache-control')).toBe('max-age=600')
+    expect(res.headers.get('etag')).toMatch(/^".*"$/)
+    expect(await res.text()).toBe('hello from a compiled static file\n')
+    // a compiled response cannot compare etags, so a conditional request gets the file again
+    const conditional = await fetch(`${base}/static/hello.txt`, { headers: { 'if-none-match': res.headers.get('etag') } })
+    expect(conditional.status).toBe(200)
+    expect(await conditional.text()).toBe('hello from a compiled static file\n')
+  })
+
+  it('serves static files bigger than one instruction', async () => {
+    const expected = fs.readFileSync(path.join(__dirname, 'static', 'big.txt'), 'utf-8')
+    expect(expected.length).toBeGreaterThan(65535)
+    const res = await fetch(`${base}/static/big.txt`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe(expected)
   })
 })

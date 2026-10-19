@@ -24,6 +24,17 @@ export const mergeMiddleware = (incoming, existing) => {
   return mergeInto
 }
 
+/**
+ * Whether any middleware is configured for any method
+ */
+export const hasMiddleware = middleware => {
+  if (!middleware) return false
+  for (const method in middleware) {
+    if (middleware[method] && middleware[method].length > 0) return true
+  }
+  return false
+}
+
 export const cloneMiddleware = (middleware) => {
   const clone = { ...middleware }
   for (const method in middleware) {

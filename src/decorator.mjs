@@ -15,8 +15,9 @@ export class SpliffyRequest {
    * @param method The upper case request method, read from uwsReq when omitted
    * @param urlPath The static route path, read from uwsReq when omitted (wildcard routes)
    */
-  constructor (uwsReq, paramToIndex, res, config, method, urlPath) {
-    this.res = res
+  constructor (uwsReq, paramToIndex, res, config, method, urlPath, decorate) {
+    this._res = res
+    this._decorate = decorate || null
     this._uwsReq = uwsReq
     this._config = config
     this._paramToIndex = paramToIndex
@@ -68,6 +69,12 @@ export class SpliffyRequest {
     return this._url
   }
 
+  /**
+   * The response, decorated on first access so a handler that never asks for it never pays for it
+   */
+  get res () { return this._decorate === null ? this._res : this._decorate(this._res) }
+  set res (r) { this._res = r }
+
   get headers () {
     if (this._headers === null) this._cacheHeaders()
     return this._headers
@@ -87,13 +94,13 @@ export class SpliffyRequest {
   }
 
   get remoteAddress () {
-    const val = Buffer.from(this.res.getRemoteAddressAsText()).toString()
+    const val = Buffer.from(this._res.getRemoteAddressAsText()).toString()
     Object.defineProperty(this, 'remoteAddress', { value: val, enumerable: true })
     return val
   }
 
   get proxiedRemoteAddress () {
-    const val = Buffer.from(this.res.getProxiedRemoteAddressAsText()).toString()
+    const val = Buffer.from(this._res.getProxiedRemoteAddressAsText()).toString()
     Object.defineProperty(this, 'proxiedRemoteAddress', { value: val, enumerable: true })
     return val
   }
@@ -138,12 +145,15 @@ export function decorateRequest (uwsReq, paramToIndex, res, config) {
  * handler that never looks at them never pays for parsing them.
  */
 export class HandlerContext {
-  constructor (req, res, bodyPromise) {
+  constructor (req, res, bodyPromise, decorate) {
     this.req = req
-    this.res = res
+    this._res = res
+    this._decorate = decorate || null
     this.bodyPromise = bodyPromise
   }
 
+  get res () { return this._decorate === null ? this._res : this._decorate(this._res) }
+  set res (r) { this._res = r }
   get url () { return this.req.spliffyUrl }
   get headers () { return this.req.headers }
   get cookies () { return this.req.cookies }
@@ -155,11 +165,27 @@ export class HandlerContext {
  * write per method. Per request state (headers, ended, statusCode...) defaults live here too and
  * are only written to the instance when they change.
  */
+// uws runs the cork callback synchronously and without arguments, so what it needs is parked here
+// for the duration of the call instead of allocating a closure per response
+let corked = null
+let corkedBody = null
+let corkedCallback = null
+const corkedWriteHead = () => corked._writeHead()
+const corkedEnd = () => {
+  corked.flushHeaders(true)
+  corked._uwsEnd(corkedBody)
+}
+const corkedWrite = () => {
+  if (!corked.headersSent) corked.flushHeaders(true)
+  corked._uwsWrite(corkedBody)
+  if (corkedCallback) corkedCallback()
+}
+
 const buildResponseProto = (uwsProto, config, finalizeResponse, endError) => {
-  const uwsEnd = uwsProto.end
-  const uwsWrite = uwsProto.write
   const proto = Object.create(uwsProto)
   Object.defineProperties(proto, Object.getOwnPropertyDescriptors({
+    _uwsEnd: uwsProto.end,
+    _uwsWrite: uwsProto.write,
     acceptsDefault: config.acceptsDefault,
     _errorTransformer: config.errorTransformer,
     _finalizeResponse: finalizeResponse,
@@ -224,8 +250,13 @@ const buildResponseProto = (uwsProto, config, finalizeResponse, endError) => {
     flushHeaders (noCork) {
       if (this.headersSent) return
       this.headersSent = true
-      if (noCork) this._writeHead()
-      else this.cork(() => this._writeHead())
+      if (noCork) {
+        this._writeHead()
+      } else {
+        corked = this
+        this.cork(corkedWriteHead)
+        corked = null
+      }
     },
     ensureOnAborted () {
       if (this._onAbortedRegistered) return
@@ -235,12 +266,12 @@ const buildResponseProto = (uwsProto, config, finalizeResponse, endError) => {
     write (chunk, encoding, cb) {
       this.ensureOnAborted()
       this.streaming = true
-      return this.cork(() => {
-        if (!this.headersSent) this.flushHeaders(true)
-        const result = uwsWrite.call(this, (chunk instanceof Buffer || chunk instanceof Uint8Array || typeof chunk === 'string') ? chunk : JSON.stringify(chunk))
-        if (cb) cb()
-        return result
-      })
+      corked = this
+      corkedBody = (chunk instanceof Buffer || chunk instanceof Uint8Array || typeof chunk === 'string') ? chunk : JSON.stringify(chunk)
+      corkedCallback = cb || null
+      const result = this.cork(corkedWrite)
+      corked = corkedBody = corkedCallback = null
+      return result
     },
     end (body) {
       if (this.ended) return
@@ -248,14 +279,15 @@ const buildResponseProto = (uwsProto, config, finalizeResponse, endError) => {
       this.writableEnded = true
       if (this.headersSent || (!this._h && (!this.statusCode || this.statusCode === 200))) {
         // nothing to write ahead of the body, so one uws end call sends status, headers and body
-        // in a single write without the cost of a cork callback
+        // in a single write with no need to cork
         this.headersSent = true
-        uwsEnd.call(this, body || '')
+        this._uwsEnd(body || '')
       } else {
-        this.cork(() => {
-          this.flushHeaders(true)
-          uwsEnd.call(this, body || '')
-        })
+        // status and headers go out with the body in one write
+        corked = this
+        corkedBody = body || ''
+        this.cork(corkedEnd)
+        corked = corkedBody = null
       }
       if (this.onEnd) this.onEnd()
     },

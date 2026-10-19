@@ -8,15 +8,14 @@ const { Readable } = stream
 
 const NULL_PROMISE = Promise.resolve(null)
 const EMPTY_BODY = Buffer.alloc(0)
-const METHOD_NAMES = { get: 'GET', post: 'POST', put: 'PUT', patch: 'PATCH', delete: 'DELETE', options: 'OPTIONS', head: 'HEAD', connect: 'CONNECT', trace: 'TRACE' }
 
 /**
  * The context for a request without a body. The body is only deserialized when a handler asks
  * for it, which must happen before the handler first yields, same as the headers.
  */
 class BodilessContext extends HandlerContext {
-  constructor (req, res, acceptsDefault) {
-    super(req, res, null)
+  constructor (req, res, acceptsDefault, decorate) {
+    super(req, res, null, decorate)
     this._acceptsDefault = acceptsDefault
   }
 
@@ -189,7 +188,27 @@ const fail = (res, e) => {
   }
 }
 
-export const createHandler = (handler, middleware, paramToIndex, config, urlPath) => {
+// parked for the synchronous cork callback below, same trick as the response prototype uses
+let corkedRes = null
+let corkedEnd = null
+let corkedBody = null
+let corkedContentType = null
+const corkedTypedEnd = () => {
+  corkedRes.writeHeader('content-type', corkedContentType)
+  corkedEnd.call(corkedRes, corkedBody)
+}
+
+/**
+ * Create the uws handler for a route
+ * @param handler The route handler function
+ * @param middleware The middleware for the route
+ * @param paramToIndex Map of path parameter name to uws parameter index
+ * @param config The server config
+ * @param urlPath The uws route pattern
+ * @param method The upper case method the handler is registered for. uws only routes exact method
+ * matches to it, so no request needs to ask.
+ */
+export const createHandler = (handler, middleware, paramToIndex, config, urlPath, method) => {
   const processedMiddleware = preProcessMiddleware(middleware)
   if (config.writeDateHeader && !dateInterval) {
     currentDate = new Date().toUTCString()
@@ -200,8 +219,19 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
   const staticPath = urlPath?.indexOf('*') > -1 ? null : urlPath
   // without middleware or body streaming the handler can be called directly from the uws callback
   const direct = !processedMiddleware && !handler.streamRequestBody
+  const noBody = method === 'GET' || method === 'HEAD'
   const errorTransformer = config.errorTransformer
+  const acceptsDefault = config.acceptsDefault
   let resProto = null
+  let uwsEnd = null
+
+  // turn the uws response into a spliffy response, once
+  const decorate = res => {
+    if (Object.getPrototypeOf(res) === resProto) return res
+    if (resProto === null) resProto = responseProto(res, config, finalizeResponse, endError)
+    Object.setPrototypeOf(res, resProto)
+    return res
+  }
 
   // call the handler and send whatever it returns
   const invoke = (res, context) => {
@@ -209,39 +239,58 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
     try {
       handled = handler(context)
     } catch (e) {
-      endError(res, e, uuid(), errorTransformer)
+      endError(decorate(res), e, uuid(), errorTransformer)
       return
     }
     if (handled instanceof Promise) {
       // the uws request dies when this callback returns, read everything the handler may still want
       context.req.forceCache()
-      res.ensureOnAborted()
+      decorate(res).ensureOnAborted()
       handled.then(h => finalizeResponse(null, res, h, handler.statusCodeOverride))
         .catch(e => endError(res, e, uuid(), errorTransformer))
-    } else if (typeof handled === 'string' || handled instanceof Buffer) {
-      end(res, 200, handler.statusCodeOverride, handled)
+    } else if (Object.getPrototypeOf(res) !== resProto && !handler.statusCodeOverride && !currentDate) {
+      // the handler never touched the response, so the answer is a single uws call
+      if (uwsEnd === null) uwsEnd = Object.getPrototypeOf(res).end
+      if (typeof handled === 'string' || handled instanceof Buffer) {
+        uwsEnd.call(res, handled)
+      } else if (!handled) {
+        uwsEnd.call(res, '')
+      } else if (handled.body || handled.statusMessage || handled.statusCode || handled.headers) {
+        finalizeResponse(null, decorate(res), handled, null)
+      } else {
+        const serialized = serializeBody(handled, undefined, acceptsDefault)
+        if (serialized?.contentType) {
+          corkedRes = res
+          corkedEnd = uwsEnd
+          corkedBody = serialized.data || ''
+          corkedContentType = serialized.contentType
+          res.cork(corkedTypedEnd)
+          corkedRes = corkedEnd = corkedBody = corkedContentType = null
+        } else {
+          uwsEnd.call(res, serialized?.data || '')
+        }
+      }
     } else {
-      finalizeResponse(null, res, handled, handler.statusCodeOverride)
+      finalizeResponse(null, decorate(res), handled, handler.statusCodeOverride)
     }
   }
 
   return function (res, req) {
     try {
-      Object.setPrototypeOf(res, resProto || (resProto = responseProto(res, config, finalizeResponse, endError)))
-      const rawMethod = req.getMethod()
-      if (direct && (rawMethod === 'get' || rawMethod === 'head')) {
+      if (direct && noBody) {
         // no body to wait for: the request is only read while the uws request is still valid
-        const sReq = new SpliffyRequest(req, paramToIndex, res, config, rawMethod === 'get' ? 'GET' : 'HEAD', staticPath)
-        invoke(res, new HandlerContext(sReq, res, NULL_PROMISE))
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
+        invoke(res, new HandlerContext(sReq, res, NULL_PROMISE, decorate))
       } else if (direct) {
         // the uws request is gone by the time the body arrives, so read it all now
-        const sReq = new SpliffyRequest(req, paramToIndex, res, config, METHOD_NAMES[rawMethod] || rawMethod.toUpperCase(), staticPath)
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
         if (!hasBody(req)) {
           // nothing to wait for, so the handler runs now while the uws request is still readable
-          invoke(res, new BodilessContext(sReq, res, config.acceptsDefault))
+          invoke(res, new BodilessContext(sReq, res, acceptsDefault, decorate))
           return
         }
         sReq.forceCache()
+        decorate(res)
         res.ensureOnAborted()
         let buffer = null
         res.onData((data, isLast) => {
@@ -251,15 +300,16 @@ export const createHandler = (handler, middleware, paramToIndex, config, urlPath
           }
           if (!isLast || res.ended) return
           try {
-            const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], config.acceptsDefault)
-            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body)))
+            const body = deserializeBody(buffer || EMPTY_BODY, sReq.headers['content-type'], acceptsDefault)
+            invoke(res, new HandlerContext(sReq, res, Promise.resolve(body), decorate))
           } catch (e) {
             endError(res, e, uuid(), errorTransformer)
           }
         })
       } else {
-        const sReq = new SpliffyRequest(req, paramToIndex, res, config, null, staticPath)
+        const sReq = new SpliffyRequest(req, paramToIndex, res, config, method, staticPath, decorate)
         sReq.forceCache()
+        decorate(res)
         res.ensureOnAborted()
         handleRequest(sReq, res, handler, processedMiddleware, config).catch(e => fail(res, e))
       }

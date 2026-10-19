@@ -14,7 +14,7 @@ export const redirect = (location, permanent = true) => () => ({
 })
 
 export { default as log } from './log.mjs'
-export { declarative } from './declarative.mjs'
+export { declarative, compileResponse } from './declarative.mjs'
 export { parseQuery, setMultiValueKey } from './url.mjs'
 
 /**

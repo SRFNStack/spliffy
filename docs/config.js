@@ -101,6 +101,9 @@ export default div(
     li(strong('decodeQueryParameters'),
       ': run decodeURIComponent(param.replace(/+/g,"%20")) on each query parameter key and value. This is disabled by default. The recommended way to send data is via json in a request body.'),
     li(strong('cacheStatic'), ': cache static files in memory to increase performance. false by default.'),
+    li(strong('declarativeStatic'), ': with cacheStatic, serve static files as declarative responses that run inside µWebSockets.js with no javascript per request. ' +
+      'Conditional requests get the file again instead of a 304. Files on routes with middleware, the notFoundRoute and the defaultRoute are served the usual way. true by default.'),
+    li(strong('declarativeStaticMaxSize'), ': the largest file, in bytes, served as a declarative response. 1048576 (1MiB) by default.'),
     li(strong('extendIncomingMessage'), ': Apply the prototype of IncomingMessage to enable middleware that pollutes the prototype (like passportjs), default false.'),
     li(strong('writeDateHeader'), ': write a Date header with the server time with ISO format, default false.'),
     li(strong('autoOptions'), ': automatically generate options routes for every end point if not provided, default false.'),

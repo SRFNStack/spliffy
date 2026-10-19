@@ -4,6 +4,7 @@ import uws from 'uWebSockets.js'
 import { createHandler, createNotFoundHandler } from './handler.mjs'
 import { findRoutes } from './routes.mjs'
 import { isDeclarative } from './declarative.mjs'
+import { hasMiddleware } from './middleware.mjs'
 import path from 'path'
 import fs from 'fs'
 
@@ -32,7 +33,9 @@ const optionsHandler = (config, middleware, methods) => {
   }),
   middleware,
   [],
-  config
+  config,
+  null,
+  'OPTIONS'
   )
 }
 
@@ -108,12 +111,19 @@ export async function startServer (config) {
         hadSlash = true
         route.urlPath = route.urlPath.substring(0, route.urlPath.length - 1)
       }
+      // a compiled copy of the handler can stand in when nothing has to run per request
+      const compiled = (route.declarativeHandlers && !hasMiddleware(route.middleware) &&
+        config.notFoundRouteHandler !== route && config.defaultRouteHandler !== route)
+        ? route.declarativeHandlers
+        : null
       for (const method in route.handlers) {
         let theHandler = null
         if (method === 'WEBSOCKET' || isDeclarative(route.handlers[method])) {
           theHandler = route.handlers[method]
+        } else if (compiled && compiled[method]) {
+          theHandler = compiled[method]
         } else {
-          theHandler = createHandler(route.handlers[method], route.middleware, route.paramToIndex, config, route.urlPath)
+          theHandler = createHandler(route.handlers[method], route.middleware, route.paramToIndex, config, route.urlPath, method)
         }
         app[appMethods[method]](route.urlPath, theHandler)
         if (hadSlash && config.serveRoutesWithSlash) {

@@ -46,6 +46,13 @@ export async function initConfig (userConfig) {
     config.writeDateHeader = false
   }
 
+  if (!('declarativeStatic' in config)) {
+    config.declarativeStatic = true
+  }
+  if (!('declarativeStaticMaxSize' in config)) {
+    config.declarativeStaticMaxSize = 1024 * 1024
+  }
+
   config.acceptsDefault = config.acceptsDefault || defaultHeaders.acceptsDefault
   config.defaultContentType = config.defaultContentType || defaultHeaders.defaultContentType
 

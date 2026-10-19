@@ -5,5 +5,9 @@ import path from 'path'
 spliffy({
   routeDir: path.join(moduleDirname(import.meta.url), 'bare', 'www'),
   port: 11421,
-  logAccess: false
+  logAccess: false,
+  cacheStatic: true,
+  staticContentTypes: {
+    '.txt': 'text/plain'
+  }
 })

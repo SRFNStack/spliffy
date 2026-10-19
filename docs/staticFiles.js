@@ -34,6 +34,14 @@ export default div(
     li(code('/about/'), ' serves ', code('www/about/index.html'))
   ),
 
+  h4('Caching'),
+  p('Every static response carries an ', code('ETag'), ' and a ', code('Cache-Control'), ' header (', code('max-age=600'), ' unless ',
+    code('staticCacheControl'), ' says otherwise), so clients serve the file from their own cache until it expires. ',
+    'A conditional request with a matching ', code('If-None-Match'), ' gets a 304 with no body.'),
+  p('Set ', code('cacheStatic'), ' to keep files in memory instead of reading them from disk on every request. ',
+    'Cached files are also compiled into declarative responses (see ', fnlink({ to: '/routing' }, 'Routing'), ') that are served inside µWebSockets.js without running any javascript, ',
+    'which is as fast as it gets. The one thing a compiled response cannot do is compare etags, so conditional requests get the file again instead of a 304. ',
+    'Set ', code('declarativeStatic'), ' to false to keep 304s. Files bigger than ', code('declarativeStaticMaxSize'), ' (1MiB), files under middleware, and the notFoundRoute and defaultRoute are always served the usual way.'),
   h4('Content Types & Mime Magic'),
   p('Spliffy automatically determines the ', code('Content-Type'), ' based on the file extension. We support all the standard types you\'d expect.'),
   p('Need something custom? You can add your own mappings in the ', fnlink({ to: '/config' }, 'config'), ':'),

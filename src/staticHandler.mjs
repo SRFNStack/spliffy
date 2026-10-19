@@ -1,5 +1,6 @@
 import fs from 'fs'
 import etag from 'etag'
+import { compileResponse } from './declarative.mjs'
 
 const readFile = async (fullPath) => await new Promise(
   (resolve, reject) =>
@@ -70,5 +71,30 @@ export function createStaticHandler (fullPath, contentType, cacheStatic, staticC
         return fs.createReadStream(fullPath)
       }
     }
+  }
+}
+
+/**
+ * Compile a static file into a declarative response: the file, its content type, cache control and
+ * etag, served inside uws with nothing running per request. Conditional requests get the full file
+ * rather than a 304, there is no javascript to compare the etag.
+ * @returns {ArrayBuffer|null} null when the file is missing or bigger than maxSize
+ */
+export function compileStaticResponse (fullPath, contentType, staticCacheControl, maxSize) {
+  if (!fs.existsSync(fullPath)) return null
+  const stat = fs.statSync(fullPath)
+  if (!stat.isFile() || stat.size > maxSize) return null
+  const content = fs.readFileSync(fullPath)
+  try {
+    return compileResponse({
+      headers: {
+        'content-type': contentType || undefined,
+        'cache-control': staticCacheControl || 'max-age=600',
+        etag: etag(content)
+      },
+      body: content
+    })
+  } catch (e) {
+    return null
   }
 }
