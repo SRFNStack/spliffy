@@ -11,6 +11,85 @@ const BROTLI_DEFAULT_LGWIN = 22
 // the compressor allocates and clears for nothing, which for a few kilobytes costs more than compressing them
 const windowBitsFor = (length, min, max) => Math.min(max, Math.max(min, 32 - Math.clz32(length - 1)))
 
+// windows this big and smaller are worth keeping a compressor around for
+const RETAINED_MAX_WINDOW_BITS = 18
+
+/**
+ * A compressor kept for reuse. Node's one call API builds a new compressor for every body and tears
+ * it down after, and for a body of a few kilobytes that is a fair share of the work. This drives the
+ * same native handle the one call API uses, then resets it for the next body. The handle is reached
+ * through node internals, so it is checked with a round trip once and the one call API stands in when
+ * it is not there or fails.
+ * @returns {(body: Buffer) => Buffer|null} null when the handle cannot be driven this way
+ */
+const retainedCompressor = (make, finish, oneCall, verify) => {
+  let stream
+  let handle
+  let state
+  try {
+    stream = make()
+    handle = stream._handle
+    state = stream._writeState
+    if (!handle || !(state instanceof Uint32Array) || state.length < 2 ||
+      typeof handle.writeSync !== 'function' || typeof handle.reset !== 'function') {
+      stream.close()
+      return null
+    }
+  } catch (e) {
+    return null
+  }
+  // an error the handle raises reaches the stream, which must not take the process down
+  stream.on('error', () => {})
+  const compress = input => {
+    let chunks = null
+    let first = null
+    let inOff = 0
+    let inLen = input.length
+    let outSize = inLen < 512 ? 256 : inLen >> 1
+    for (;;) {
+      const out = Buffer.allocUnsafe(outSize)
+      handle.writeSync(finish, input, inOff, inLen, out, 0, outSize)
+      const availOut = state[0]
+      const availIn = state[1]
+      const produced = outSize - availOut
+      if (produced > 0) {
+        const piece = produced === outSize ? out : out.subarray(0, produced)
+        if (first === null) first = piece
+        else (chunks || (chunks = [first])).push(piece)
+      }
+      inOff += inLen - availIn
+      inLen = availIn
+      if (availOut !== 0) break
+      outSize *= 2
+    }
+    handle.reset()
+    return chunks === null ? (first || Buffer.alloc(0)) : Buffer.concat(chunks)
+  }
+  // prove the round trip once, with a body that needs more than one output buffer
+  try {
+    const sample = Buffer.from('spliffy '.repeat(400) + Math.random())
+    if (Buffer.compare(verify(compress(sample)), sample) !== 0 || Buffer.compare(verify(compress(sample)), sample) !== 0) {
+      stream.close()
+      return null
+    }
+  } catch (e) {
+    try { stream.close() } catch (ce) {}
+    return null
+  }
+  let broken = false
+  return input => {
+    if (broken) return oneCall(input)
+    try {
+      return compress(input)
+    } catch (e) {
+      // the handle is in an unknown state, so this body goes the one call way and so do the rest
+      broken = true
+      try { stream.close() } catch (ce) {}
+      return oneCall(input)
+    }
+  }
+}
+
 /**
  * The options for a body of a known size: the configured options with a window fitted to the body,
  * built once per window size
@@ -21,6 +100,42 @@ class SizedOptions {
     this.gzip = gzip
     this.brotliBySize = brotli.params && brotli.params[BROTLI_PARAM_LGWIN] === undefined ? new Map() : null
     this.gzipBySize = gzip.windowBits === undefined ? new Map() : null
+    // retained compressors by their options object, false once one could not be made
+    this.compressors = new Map()
+  }
+
+  /**
+   * Compress a whole body with the options fitted to it, through a retained compressor when the
+   * window is small enough to keep one around
+   */
+  brotliCompress (body) {
+    const options = this.brotliFor(body.length)
+    const bits = options.params[BROTLI_PARAM_LGWIN]
+    if (bits !== undefined && bits <= RETAINED_MAX_WINDOW_BITS) {
+      const compress = this.compressorFor(options, 'br')
+      if (compress !== null) return compress(body)
+    }
+    return zlib.brotliCompressSync(body, options)
+  }
+
+  gzipCompress (body) {
+    const options = this.gzipFor(body.length)
+    if (options.windowBits !== undefined && options.windowBits <= 15) {
+      const compress = this.compressorFor(options, 'gzip')
+      if (compress !== null) return compress(body)
+    }
+    return zlib.gzipSync(body, options)
+  }
+
+  compressorFor (options, encoding) {
+    let compress = this.compressors.get(options)
+    if (compress === undefined) {
+      compress = encoding === 'br'
+        ? retainedCompressor(() => zlib.createBrotliCompress(options), zlib.constants.BROTLI_OPERATION_FINISH, body => zlib.brotliCompressSync(body, options), zlib.brotliDecompressSync)
+        : retainedCompressor(() => zlib.createGzip(options), zlib.constants.Z_FINISH, body => zlib.gzipSync(body, options), zlib.gunzipSync)
+      this.compressors.set(options, compress)
+    }
+    return compress
   }
 
   brotliFor (length) {
@@ -83,9 +198,7 @@ class Compressing {
 
   compressSync (body) {
     const sized = this.options.sized
-    return this.encoding === 'br'
-      ? zlib.brotliCompressSync(body, sized.brotliFor(body.length))
-      : zlib.gzipSync(body, sized.gzipFor(body.length))
+    return this.encoding === 'br' ? sized.brotliCompress(body) : sized.gzipCompress(body)
   }
 
   openStream (res) {

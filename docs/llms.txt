@@ -2,11 +2,11 @@
 
 > Spliffy is a Node.js web framework on top of µWebSockets.js. Routes are files: a directory of
 > `.rt.mjs` handler files and static assets becomes the URL space of the server, like Apache or PHP.
-> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.6.0.
+> Package: `@srfnstack/spliffy` (ESM, Node 22 to 26). Version documented here: 1.7.0.
 
 The documentation site (https://srfnstack.github.io/spliffy/) is a client rendered single page app,
 so this file is the complete reference, not a table of contents. Everything below is checked
-against the 1.6.0 source. The package has no TypeScript types.
+against the 1.7.0 source. The package has no TypeScript types.
 
 ## Links
 
@@ -418,8 +418,10 @@ and `gzip` are passed to zlib (defaults brotli quality 3, gzip level 6), `filter
 replaces the content type test. A body sent in one piece is compressed in one call with the
 compression window fitted to the body: a window larger than the body is memory the compressor
 allocates and clears for nothing, and for a few kilobytes that costs more than compressing them.
-Pass `brotli.params[BROTLI_PARAM_LGWIN]` or `gzip.windowBits` to fix the window instead. A body
-written in pieces or streamed goes through a zlib stream with the configured options. Responses that already carry a `content-encoding`
+Pass `brotli.params[BROTLI_PARAM_LGWIN]` or `gzip.windowBits` to fix the window instead. Bodies
+with a window of 256KB or less reuse a compressor kept per window size rather than building and
+tearing one down per call, which is about a fifth of the cost of a small body. A body written in
+pieces or streamed goes through a zlib stream with the configured options. Responses that already carry a `content-encoding`
 (precompressed static files) are left alone. A `vary: accept-encoding` header is added.
 
 A typical auth middleware:
@@ -679,7 +681,7 @@ Logging
 - `logLevel` [`INFO`]
 - `logger` [built in]
 
-Not functional in 1.6.0, accepted but ignored: `parseCookie` (cookies are always available),
+Not functional in 1.7.0, accepted but ignored: `parseCookie` (cookies are always available),
 `decodePathParameters`, `logAccess`, a top level `routePrefix`.
 
 ## Package exports
