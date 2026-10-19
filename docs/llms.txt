@@ -525,7 +525,8 @@ nodeModuleRoutes: {
 ## WebSockets
 
 Export a `WEBSOCKET` object. It is handed to µWebSockets.js `app.ws()` as is, so every uws
-behaviour and option applies.
+behaviour and option applies. It is registered on every listener, so with `httpsKeyFile` and
+`httpsCertFile` the same route answers `wss://` on `httpsPort`.
 
 ```js
 // www/ws/room/$roomId.rt.mjs  ->  ws://host/ws/room/:roomId

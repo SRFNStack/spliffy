@@ -7,7 +7,8 @@ export default div(
     'Sometimes a request/response just isn\'t enough to keep the session going. Spliffy supports WebSockets out of the box so you can keep the connection lit.'
   ),
   p(
-    'To handle WebSockets, export a ', code('WEBSOCKET'), ' object from your route file.'
+    'To handle WebSockets, export a ', code('WEBSOCKET'), ' object from your route file. With ', code('httpsKeyFile'),
+    ' and ', code('httpsCertFile'), ' set the same route answers ', code('wss://'), ' on ', code('httpsPort'), ', nothing more to configure.'
   ),
   prismCode(`
 export default {

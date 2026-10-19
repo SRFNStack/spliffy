@@ -2,6 +2,8 @@ const fetch = require('node-fetch')
 const fs = require('fs')
 const path = require('path')
 const https = require('https')
+const net = require('net')
+const tls = require('tls')
 const zlib = require('zlib')
 // the same payload compressed/big.rt.mjs builds, jest cannot import the module
 const items = []
@@ -12,6 +14,39 @@ const base = 'http://localhost:11421'
 const tlsBase = 'https://localhost:11422'
 // the test certificate is self signed
 const agent = new https.Agent({ rejectUnauthorized: false })
+
+// a bare websocket client: one masked text frame out, the first frame back, no library
+const wsEcho = (socket, host, text) => new Promise((resolve, reject) => {
+  const key = require('crypto').randomBytes(16).toString('base64')
+  let buffered = Buffer.alloc(0)
+  let upgraded = false
+  socket.on('error', reject)
+  socket.on('data', chunk => {
+    buffered = Buffer.concat([buffered, chunk])
+    if (!upgraded) {
+      const end = buffered.indexOf('\r\n\r\n')
+      if (end === -1) return
+      const head = buffered.slice(0, end).toString()
+      if (!/^HTTP\/1\.1 101/.test(head)) return reject(new Error(head))
+      upgraded = true
+      buffered = buffered.slice(end + 4)
+      const payload = Buffer.from(text)
+      const mask = require('crypto').randomBytes(4)
+      const frame = Buffer.alloc(6 + payload.length)
+      frame[0] = 0x81
+      frame[1] = 0x80 | payload.length
+      mask.copy(frame, 2)
+      for (let i = 0; i < payload.length; i++) frame[6 + i] = payload[i] ^ mask[i & 3]
+      socket.write(frame)
+    }
+    if (upgraded && buffered.length >= 2 && buffered.length >= 2 + (buffered[1] & 0x7f)) {
+      const length = buffered[1] & 0x7f
+      socket.end()
+      resolve({ opcode: buffered[0] & 0x0f, text: buffered.slice(2, 2 + length).toString() })
+    }
+  })
+  socket.write(`GET /sock HTTP/1.1\r\nHost: ${host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`)
+})
 
 describe('routes with no middleware', () => {
   it('returns an empty 200 for an empty handler', async () => {
@@ -183,6 +218,13 @@ describe('routes with no middleware', () => {
     expect(spa.status).toBe(200)
     // and http still answers too
     expect((await fetch(`${base}/user/42`)).status).toBe(200)
+  })
+
+  it('echoes over ws and wss', async () => {
+    const plain = await wsEcho(net.connect(11421, 'localhost'), 'localhost:11421', 'over ws')
+    expect(plain).toEqual({ opcode: 1, text: 'over ws' })
+    const secure = await wsEcho(tls.connect({ port: 11422, host: 'localhost', rejectUnauthorized: false }), 'localhost:11422', 'over wss')
+    expect(secure).toEqual({ opcode: 1, text: 'over wss' })
   })
 
   it('echoes octet-stream bodies byte for byte', async () => {
